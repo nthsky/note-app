@@ -303,8 +303,13 @@ body {
 .empty-state {
   position: absolute;
   inset: 48px 0 0;
-  display: grid;
+  display: none;
   place-items: center;
   color: var(--ink-faint);
   font-size: 14px;
+  pointer-events: none;
+}
+
+.empty-state.is-visible {
+  display: grid;
 }

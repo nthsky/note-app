@@ -45,7 +45,10 @@ async function main() {
 
     countEl.textContent = `${Object.keys(store.notes).length} 条`;
     listEl.replaceChildren();
-    emptyEl.hidden = rows.length > 0;
+    const isEmpty = rows.length === 0;
+    emptyEl.classList.toggle("is-visible", isEmpty);
+    emptyEl.hidden = !isEmpty;
+    emptyEl.setAttribute("aria-hidden", String(!isEmpty));
 
     for (const { id, note } of rows) {
       const open = store.openIds.includes(id);
