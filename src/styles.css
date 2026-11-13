@@ -132,10 +132,12 @@ body {
   left: 0;
   z-index: 50;
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
+  grid-template-columns: repeat(7, 28px);
   gap: 2px;
-  width: 248px;
+  width: max-content;
+  max-width: calc(100vw - 32px);
   max-height: 220px;
+  overflow-x: hidden;
   overflow-y: auto;
   padding: 8px;
   border-radius: 12px;
@@ -144,7 +146,12 @@ body {
   backdrop-filter: blur(12px);
   box-shadow: 0 10px 24px rgba(40, 28, 8, 0.16);
   animation: rise 160ms ease;
-  scrollbar-width: thin;
+  scrollbar-width: none;
+}
+
+.emoji-picker::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 .emoji-picker[hidden] {
