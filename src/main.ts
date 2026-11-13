@@ -366,16 +366,49 @@ function setUrlNoteId(noteId: string) {
   window.history.replaceState({}, "", url);
 }
 
+async function positionRelativeToCurrent(
+  placement: "below" | "cascade",
+  index = 0,
+) {
+  const current = getCurrentWindow();
+  const scale = await current.scaleFactor();
+  const pos = await current.outerPosition();
+  const size = await current.outerSize();
+  const x = pos.x / scale;
+  const y = pos.y / scale;
+  const width = size.width / scale;
+  const height = size.height / scale;
+  const gap = 16;
+
+  if (placement === "below") {
+    return { x, y: y + height + gap, width, height };
+  }
+
+  // Cascade for restore: step right/down enough to avoid heavy overlap.
+  const stepX = Math.max(48, Math.round(width * 0.15));
+  const stepY = Math.max(48, Math.round(height * 0.15));
+  return {
+    x: x + stepX * (index + 1),
+    y: y + stepY * (index + 1),
+    width,
+    height,
+  };
+}
+
 async function openNoteWindow(
   noteId: string,
-  offset = { x: 28, y: 28 },
-  options: { bringToFront?: boolean } = {},
+  options: {
+    placement?: "below" | "cascade";
+    cascadeIndex?: number;
+    focus?: boolean;
+  } = {},
 ) {
-  const bringToFront = options.bringToFront ?? true;
+  const placement = options.placement ?? "below";
+  const focus = options.focus ?? false;
   const label = windowLabelFor(noteId);
   const existing = await WebviewWindow.getByLabel(label);
   if (existing) {
-    if (bringToFront) {
+    if (focus) {
       await existing.show();
       await existing.setFocus();
     }
@@ -384,27 +417,33 @@ async function openNoteWindow(
 
   let x: number | undefined;
   let y: number | undefined;
+  let width = 360;
+  let height = 420;
   try {
-    const current = getCurrentWindow();
-    const pos = await current.outerPosition();
-    x = pos.x + offset.x;
-    y = pos.y + offset.y;
+    const pos = await positionRelativeToCurrent(
+      placement,
+      options.cascadeIndex ?? 0,
+    );
+    x = pos.x;
+    y = pos.y;
+    width = Math.round(pos.width);
+    height = Math.round(pos.height);
   } catch {
-    // ignore
+    // ignore and center
   }
 
   const win = new WebviewWindow(label, {
     url: `index.html?id=${noteId}`,
     title: "便签",
-    width: 360,
-    height: 420,
+    width,
+    height,
     minWidth: 240,
     minHeight: 200,
     resizable: true,
     decorations: false,
     transparent: true,
     shadow: false,
-    focus: bringToFront,
+    focus,
     visible: true,
     center: x === undefined,
     x,
@@ -422,11 +461,6 @@ async function openNoteWindow(
       reject(event);
     });
   });
-
-  if (bringToFront) {
-    await win.show();
-    await win.setFocus();
-  }
 
   return win;
 }
@@ -708,11 +742,11 @@ async function main() {
     const siblings = store.openIds.filter((id) => id !== noteId);
     for (const [index, id] of siblings.entries()) {
       try {
-        await openNoteWindow(
-          id,
-          { x: 28 * (index + 1), y: 28 * (index + 1) },
-          { bringToFront: false },
-        );
+        await openNoteWindow(id, {
+          placement: "cascade",
+          cascadeIndex: index,
+          focus: false,
+        });
       } catch (error) {
         console.error("failed to restore note window", id, error);
       }
@@ -817,7 +851,7 @@ async function main() {
     saveStore(latest);
     Object.assign(store, latest);
     try {
-      await openNoteWindow(id, { x: 36, y: 36 }, { bringToFront: true });
+      await openNoteWindow(id, { placement: "below", focus: false });
     } catch (error) {
       console.error("failed to create note window", error);
       window.alert("新建便签失败，请重试");
