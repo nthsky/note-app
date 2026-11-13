@@ -96,10 +96,12 @@ body {
 
 .title-group {
   position: relative;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 2px;
+  max-width: 100%;
   min-width: 0;
+  vertical-align: middle;
 }
 
 .emoji-btn {
@@ -163,8 +165,10 @@ body {
 }
 
 .note-title {
-  flex: 1;
-  min-width: 0;
+  flex: 0 1 auto;
+  width: auto;
+  min-width: 2ch;
+  max-width: 100%;
   margin: 0;
   padding: 2px 4px;
   border: 1px solid transparent;
@@ -179,6 +183,7 @@ body {
   cursor: default;
   user-select: none;
   pointer-events: none;
+  field-sizing: content;
 }
 
 .note-title.is-editing {
@@ -189,6 +194,8 @@ body {
   background: rgba(255, 255, 255, 0.35);
   color: var(--ink);
   box-shadow: 0 0 0 2px rgba(31, 111, 91, 0.12);
+  field-sizing: content;
+  min-width: 4ch;
 }
 
 .edit-title-btn {

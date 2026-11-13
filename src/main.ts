@@ -209,10 +209,30 @@ async function main() {
     await appWindow.setTitle(full);
   };
 
+  const titleMeasureCanvas = document.createElement("canvas");
+  const fitTitleWidth = () => {
+    const value = titleInput.value || defaults.title;
+    const ctx = titleMeasureCanvas.getContext("2d");
+    if (!ctx) {
+      titleInput.style.width = `${Math.max(value.length, 2)}ch`;
+      return;
+    }
+    const style = window.getComputedStyle(titleInput);
+    ctx.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+    const textWidth = ctx.measureText(value).width;
+    const pad =
+      Number.parseFloat(style.paddingLeft) +
+      Number.parseFloat(style.paddingRight) +
+      Number.parseFloat(style.borderLeftWidth) +
+      Number.parseFloat(style.borderRightWidth);
+    titleInput.style.width = `${Math.ceil(textWidth + pad + 2)}px`;
+  };
+
   const renderTitleUi = async ({ persistNow = true } = {}) => {
     state.title = normalizeTitle(state.title);
     btnEmoji.textContent = state.emoji;
     titleInput.value = state.title;
+    fitTitleWidth();
     if (persistNow) persist();
     await syncWindowTitle();
   };
@@ -295,6 +315,11 @@ async function main() {
 
   btnEditTitle.addEventListener("click", () => {
     startTitleEdit();
+  });
+
+  titleInput.addEventListener("input", () => {
+    if (!titleInput.classList.contains("is-editing")) return;
+    fitTitleWidth();
   });
 
   titleInput.addEventListener("keydown", (event) => {
