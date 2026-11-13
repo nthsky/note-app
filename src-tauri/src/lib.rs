@@ -1,29 +1,24 @@
 #[cfg(target_os = "macos")]
 fn make_window_transparent(window: &tauri::WebviewWindow) {
-    use objc::runtime::{Object, NO, YES};
-    use objc::{class, msg_send, sel, sel_impl};
+    use objc2_app_kit::{NSColor, NSWindow};
 
     let _ = window.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));
 
-    if let Ok(ns_window) = window.ns_window() {
-        unsafe {
-            let ns_window = ns_window as *mut Object;
-            let clear: *mut Object = msg_send![class!(NSColor), clearColor];
-            let _: () = msg_send![ns_window, setOpaque: NO];
-            let _: () = msg_send![ns_window, setBackgroundColor: clear];
-            let _: () = msg_send![ns_window, setHasShadow: NO];
+    if let Ok(ns_window_ptr) = window.ns_window() {
+        // SAFETY: pointer comes from Tauri's live NSWindow on the main thread.
+        let ns_window: &NSWindow = unsafe { &*ns_window_ptr.cast() };
+        ns_window.setOpaque(false);
+        let clear = NSColor::clearColor();
+        ns_window.setBackgroundColor(Some(&clear));
+        ns_window.setHasShadow(false);
 
-            let content_view: *mut Object = msg_send![ns_window, contentView];
-            if !content_view.is_null() {
-                let _: () = msg_send![content_view, setWantsLayer: YES];
-                let layer: *mut Object = msg_send![content_view, layer];
-                if !layer.is_null() {
-                    let cg_clear: *mut Object = msg_send![clear, CGColor];
-                    let _: () = msg_send![layer, setBackgroundColor: cg_clear];
-                    let _: () = msg_send![layer, setOpaque: NO];
-                    let _: () = msg_send![layer, setCornerRadius: 18.0_f64];
-                    let _: () = msg_send![layer, setMasksToBounds: YES];
-                }
+        if let Some(content_view) = ns_window.contentView() {
+            content_view.setWantsLayer(true);
+            if let Some(layer) = content_view.layer() {
+                layer.setBackgroundColor(Some(&clear.CGColor()));
+                layer.setOpaque(false);
+                layer.setCornerRadius(18.0);
+                layer.setMasksToBounds(true);
             }
         }
     }
