@@ -366,39 +366,18 @@ function setUrlNoteId(noteId: string) {
   window.history.replaceState({}, "", url);
 }
 
-async function forceWindowFront(win: WebviewWindow, keepAlwaysOnTop: boolean) {
-  // Always-on-top siblings stay above normal windows; elevate then restore.
-  await win.setAlwaysOnTop(true);
-  await win.show();
-  await win.setFocus();
-  try {
-    await invoke("bring_window_to_front", { label: win.label });
-  } catch {
-    // Fallback already applied via setAlwaysOnTop/setFocus.
-  }
-  if (!keepAlwaysOnTop) {
-    await win.setAlwaysOnTop(false);
-    await win.setFocus();
-    try {
-      await invoke("bring_window_to_front", { label: win.label });
-    } catch {
-      // ignore
-    }
-  }
-}
-
 async function openNoteWindow(
   noteId: string,
   offset = { x: 28, y: 28 },
-  options: { bringToFront?: boolean; alwaysOnTop?: boolean } = {},
+  options: { bringToFront?: boolean } = {},
 ) {
   const bringToFront = options.bringToFront ?? true;
-  const alwaysOnTop = options.alwaysOnTop ?? false;
   const label = windowLabelFor(noteId);
   const existing = await WebviewWindow.getByLabel(label);
   if (existing) {
     if (bringToFront) {
-      await forceWindowFront(existing, alwaysOnTop || (await existing.isAlwaysOnTop()));
+      await existing.show();
+      await existing.setFocus();
     }
     return existing;
   }
@@ -427,7 +406,6 @@ async function openNoteWindow(
     shadow: false,
     focus: bringToFront,
     visible: true,
-    alwaysOnTop: bringToFront ? true : alwaysOnTop,
     center: x === undefined,
     x,
     y,
@@ -446,9 +424,8 @@ async function openNoteWindow(
   });
 
   if (bringToFront) {
-    await forceWindowFront(win, alwaysOnTop);
-  } else if (alwaysOnTop) {
-    await win.setAlwaysOnTop(true);
+    await win.show();
+    await win.setFocus();
   }
 
   return win;
@@ -831,23 +808,16 @@ async function main() {
     const latest = loadStore();
     const id = createNoteId();
     const color = NOTE_COLORS[Object.keys(latest.notes).length % NOTE_COLORS.length];
-    // Inherit pin state so a pinned parent doesn't keep covering the new note.
-    const pinned = state.alwaysOnTop || (await appWindow.isAlwaysOnTop());
     latest.notes[id] = {
       ...defaults,
       bgColor: color,
       title: `便签 ${Object.keys(latest.notes).length + 1}`,
-      alwaysOnTop: pinned,
     };
     if (!latest.openIds.includes(id)) latest.openIds.push(id);
     saveStore(latest);
     Object.assign(store, latest);
     try {
-      await openNoteWindow(
-        id,
-        { x: 36, y: 36 },
-        { bringToFront: true, alwaysOnTop: pinned },
-      );
+      await openNoteWindow(id, { x: 36, y: 36 }, { bringToFront: true });
     } catch (error) {
       console.error("failed to create note window", error);
       window.alert("新建便签失败，请重试");
