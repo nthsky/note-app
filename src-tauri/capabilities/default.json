@@ -1,10 +1,12 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main sticky note window",
-  "windows": ["main"],
+  "description": "Capability for sticky note windows",
+  "windows": ["main", "note-*"],
   "permissions": [
     "core:default",
+    "allow-init-window-chrome",
+    "core:webview:allow-create-webview-window",
     "core:window:allow-start-dragging",
     "core:window:allow-set-always-on-top",
     "core:window:allow-close",
@@ -13,6 +15,11 @@
     "core:window:allow-hide",
     "core:window:allow-set-focus",
     "core:window:allow-is-always-on-top",
-    "core:window:allow-set-title"
+    "core:window:allow-set-title",
+    "core:window:allow-outer-position",
+    "core:window:allow-set-position",
+    "core:window:allow-outer-size",
+    "core:window:allow-set-size",
+    "core:window:allow-get-all-windows"
   ]
 }

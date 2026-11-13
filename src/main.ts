@@ -1,6 +1,17 @@
+import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 
-const STORAGE_KEY = "sticky-note-v1";
+const STORE_KEY = "sticky-notes-v2";
+const LEGACY_KEY = "sticky-note-v1";
+const NOTE_COLORS = [
+  "#ffe08a",
+  "#ffc9c9",
+  "#c3e6cb",
+  "#c5d8ff",
+  "#f3d9ff",
+  "#ffe2c6",
+];
 
 const EMOJI_CATEGORIES: { label: string; emojis: string[] }[] = [
   {
@@ -273,37 +284,122 @@ const defaults: NoteState = {
 
 const emojiPrefixPattern = /^(\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic})*)\s*/u;
 
-function loadState(): NoteState {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ...defaults };
-    const parsed = { ...defaults, ...JSON.parse(raw) } as NoteState & {
-      title?: string;
-      emoji?: string;
-    };
+type NoteStore = {
+  notes: Record<string, NoteState>;
+  openIds: string[];
+};
 
-    // Migrate older saves that stored emoji inside title.
-    if (!parsed.emoji || parsed.emoji === defaults.emoji) {
-      const match = String(parsed.title ?? "").match(emojiPrefixPattern);
-      if (match) {
-        parsed.emoji = match[1];
-        parsed.title = String(parsed.title).slice(match[0].length).trim() || defaults.title;
-      }
+function normalizeNote(input: Partial<NoteState> | null | undefined): NoteState {
+  const parsed = { ...defaults, ...(input ?? {}) };
+  if (!parsed.emoji || parsed.emoji === defaults.emoji) {
+    const match = String(parsed.title ?? "").match(emojiPrefixPattern);
+    if (match) {
+      parsed.emoji = match[1];
+      parsed.title =
+        String(parsed.title).slice(match[0].length).trim() || defaults.title;
     }
-
-    return {
-      ...defaults,
-      ...parsed,
-      emoji: parsed.emoji || defaults.emoji,
-      title: parsed.title || defaults.title,
-    };
-  } catch {
-    return { ...defaults };
   }
+  return {
+    ...defaults,
+    ...parsed,
+    emoji: parsed.emoji || defaults.emoji,
+    title: parsed.title || defaults.title,
+  };
 }
 
-function saveState(state: NoteState) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+function createNoteId() {
+  return crypto.randomUUID().replace(/-/g, "").slice(0, 10);
+}
+
+function emptyStore(): NoteStore {
+  const id = createNoteId();
+  return {
+    notes: { [id]: { ...defaults } },
+    openIds: [id],
+  };
+}
+
+function loadStore(): NoteStore {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as NoteStore;
+      const notes: Record<string, NoteState> = {};
+      for (const [id, note] of Object.entries(parsed.notes ?? {})) {
+        notes[id] = normalizeNote(note);
+      }
+      const openIds = (parsed.openIds ?? []).filter((id) => notes[id]);
+      if (Object.keys(notes).length === 0) return emptyStore();
+      if (openIds.length === 0) openIds.push(Object.keys(notes)[0]);
+      return { notes, openIds };
+    }
+
+    const legacy = localStorage.getItem(LEGACY_KEY);
+    if (legacy) {
+      const id = createNoteId();
+      const note = normalizeNote(JSON.parse(legacy));
+      const store = { notes: { [id]: note }, openIds: [id] };
+      localStorage.setItem(STORE_KEY, JSON.stringify(store));
+      return store;
+    }
+  } catch {
+    // fall through
+  }
+  return emptyStore();
+}
+
+function saveStore(store: NoteStore) {
+  localStorage.setItem(STORE_KEY, JSON.stringify(store));
+}
+
+function windowLabelFor(noteId: string) {
+  return `note-${noteId}`;
+}
+
+function noteIdFromUrl() {
+  return new URLSearchParams(window.location.search).get("id");
+}
+
+function setUrlNoteId(noteId: string) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("id", noteId);
+  window.history.replaceState({}, "", url);
+}
+
+async function openNoteWindow(noteId: string, offset = { x: 28, y: 28 }) {
+  const label = windowLabelFor(noteId);
+  const existing = await WebviewWindow.getByLabel(label);
+  if (existing) {
+    await existing.setFocus();
+    return existing;
+  }
+
+  let x: number | undefined;
+  let y: number | undefined;
+  try {
+    const current = getCurrentWindow();
+    const pos = await current.outerPosition();
+    x = pos.x + offset.x;
+    y = pos.y + offset.y;
+  } catch {
+    // ignore
+  }
+
+  return new WebviewWindow(label, {
+    url: `index.html?id=${noteId}`,
+    title: "便签",
+    width: 360,
+    height: 420,
+    minWidth: 240,
+    minHeight: 200,
+    resizable: true,
+    decorations: false,
+    transparent: true,
+    shadow: false,
+    center: x === undefined,
+    x,
+    y,
+  });
 }
 
 function displayTitle(state: Pick<NoteState, "emoji" | "title">) {
@@ -366,7 +462,30 @@ function applyTheme(state: NoteState) {
 
 async function main() {
   const appWindow = getCurrentWindow();
-  const state = loadState();
+  try {
+    await invoke("init_window_chrome");
+  } catch {
+    // Non-Tauri preview can ignore this.
+  }
+
+  const store = loadStore();
+  let noteId = noteIdFromUrl();
+  if (!noteId || !store.notes[noteId]) {
+    noteId = store.openIds[0] ?? Object.keys(store.notes)[0];
+    if (!noteId) {
+      const created = emptyStore();
+      Object.assign(store, created);
+      saveStore(store);
+      noteId = created.openIds[0];
+    }
+    setUrlNoteId(noteId);
+  }
+  if (!store.openIds.includes(noteId)) {
+    store.openIds.push(noteId);
+    saveStore(store);
+  }
+
+  const state = store.notes[noteId];
 
   const titleInput = document.querySelector<HTMLInputElement>("#note-title");
   const btnEmoji = document.querySelector<HTMLButtonElement>("#btn-emoji");
@@ -382,6 +501,7 @@ async function main() {
     document.querySelector<HTMLInputElement>("#always-on-top");
   const bgImageInput =
     document.querySelector<HTMLInputElement>("#bg-image-input");
+  const btnNew = document.querySelector<HTMLButtonElement>("#btn-new");
   const btnPin = document.querySelector<HTMLButtonElement>("#btn-pin");
   const btnSettings = document.querySelector<HTMLButtonElement>("#btn-settings");
   const btnMinimize = document.querySelector<HTMLButtonElement>("#btn-minimize");
@@ -401,6 +521,7 @@ async function main() {
     !bgColorInput ||
     !alwaysOnTopInput ||
     !bgImageInput ||
+    !btnNew ||
     !btnPin ||
     !btnSettings ||
     !btnMinimize ||
@@ -411,7 +532,20 @@ async function main() {
     return;
   }
 
-  const persist = () => saveState(state);
+  const persist = () => {
+    store.notes[noteId] = state;
+    saveStore(store);
+  };
+
+  const markClosed = () => {
+    const latest = loadStore();
+    latest.openIds = latest.openIds.filter((id) => id !== noteId);
+    if (latest.openIds.length === 0 && Object.keys(latest.notes).length > 0) {
+      // Keep at least one note marked open for next launch.
+      latest.openIds = [noteId];
+    }
+    saveStore(latest);
+  };
 
   const syncPinUi = (on: boolean) => {
     btnPin.setAttribute("aria-pressed", String(on));
@@ -540,8 +674,23 @@ async function main() {
     void document.fonts.ready.then(() => fitTitleWidth());
   }
 
+  // Only the bootstrap window restores sibling notes to avoid fan-out.
+  if (appWindow.label === "main") {
+    const siblings = store.openIds.filter((id) => id !== noteId);
+    for (const [index, id] of siblings.entries()) {
+      try {
+        await openNoteWindow(id, { x: 28 * (index + 1), y: 28 * (index + 1) });
+      } catch (error) {
+        console.error("failed to restore note window", id, error);
+      }
+    }
+  }
+
   let saveTimer: number | undefined;
 
+  btnNew.addEventListener("pointerdown", (event) => {
+    event.stopPropagation();
+  });
   btnEmoji.addEventListener("pointerdown", (event) => {
     event.stopPropagation();
   });
@@ -622,6 +771,26 @@ async function main() {
     await setAlwaysOnTop(alwaysOnTopInput.checked);
   });
 
+  btnNew.addEventListener("click", async () => {
+    const latest = loadStore();
+    const id = createNoteId();
+    const color = NOTE_COLORS[Object.keys(latest.notes).length % NOTE_COLORS.length];
+    latest.notes[id] = {
+      ...defaults,
+      bgColor: color,
+      title: `便签 ${Object.keys(latest.notes).length + 1}`,
+    };
+    if (!latest.openIds.includes(id)) latest.openIds.push(id);
+    saveStore(latest);
+    Object.assign(store, latest);
+    try {
+      await openNoteWindow(id);
+    } catch (error) {
+      console.error("failed to create note window", error);
+      window.alert("新建便签失败，请重试");
+    }
+  });
+
   btnPin.addEventListener("click", async () => {
     await setAlwaysOnTop(!state.alwaysOnTop);
   });
@@ -637,7 +806,14 @@ async function main() {
   });
 
   btnMinimize.addEventListener("click", () => appWindow.minimize());
-  btnClose.addEventListener("click", () => appWindow.close());
+  btnClose.addEventListener("click", async () => {
+    markClosed();
+    await appWindow.close();
+  });
+
+  await appWindow.onCloseRequested(() => {
+    markClosed();
+  });
 
   btnBgImage.addEventListener("click", () => bgImageInput.click());
   btnClearBg.addEventListener("click", () => {

@@ -21,7 +21,6 @@ fn make_window_transparent(window: &tauri::WebviewWindow) {
                     let cg_clear: *mut Object = msg_send![clear, CGColor];
                     let _: () = msg_send![layer, setBackgroundColor: cg_clear];
                     let _: () = msg_send![layer, setOpaque: NO];
-                    // Clip the native square window to match CSS rounded corners.
                     let _: () = msg_send![layer, setCornerRadius: 18.0_f64];
                     let _: () = msg_send![layer, setMasksToBounds: YES];
                 }
@@ -30,22 +29,27 @@ fn make_window_transparent(window: &tauri::WebviewWindow) {
     }
 }
 
+#[tauri::command]
+fn init_window_chrome(window: tauri::WebviewWindow) {
+    #[cfg(target_os = "macos")]
+    make_window_transparent(&window);
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = window.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![init_window_chrome])
         .setup(|app| {
             #[cfg(desktop)]
             {
                 use tauri::Manager;
                 if let Some(window) = app.get_webview_window("main") {
-                    #[cfg(target_os = "macos")]
-                    make_window_transparent(&window);
-
-                    #[cfg(not(target_os = "macos"))]
-                    {
-                        let _ = window.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));
-                    }
-                    let _ = window;
+                    init_window_chrome(window);
                 }
             }
             Ok(())

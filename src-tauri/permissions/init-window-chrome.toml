@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-init-window-chrome"
+description = "Allow initializing transparent window chrome"
+commands.allow = ["init_window_chrome"]
