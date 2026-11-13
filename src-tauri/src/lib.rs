@@ -3,13 +3,14 @@ fn make_window_transparent(window: &tauri::WebviewWindow) {
     use objc::runtime::{Object, NO, YES};
     use objc::{class, msg_send, sel, sel_impl};
 
+    let _ = window.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));
+
     if let Ok(ns_window) = window.ns_window() {
         unsafe {
             let ns_window = ns_window as *mut Object;
             let clear: *mut Object = msg_send![class!(NSColor), clearColor];
             let _: () = msg_send![ns_window, setOpaque: NO];
             let _: () = msg_send![ns_window, setBackgroundColor: clear];
-            // Prefer CSS shadow so rounded corners stay clean.
             let _: () = msg_send![ns_window, setHasShadow: NO];
 
             let content_view: *mut Object = msg_send![ns_window, contentView];
@@ -20,6 +21,9 @@ fn make_window_transparent(window: &tauri::WebviewWindow) {
                     let cg_clear: *mut Object = msg_send![clear, CGColor];
                     let _: () = msg_send![layer, setBackgroundColor: cg_clear];
                     let _: () = msg_send![layer, setOpaque: NO];
+                    // Clip the native square window to match CSS rounded corners.
+                    let _: () = msg_send![layer, setCornerRadius: 18.0_f64];
+                    let _: () = msg_send![layer, setMasksToBounds: YES];
                 }
             }
         }
@@ -36,6 +40,11 @@ pub fn run() {
                 if let Some(window) = app.get_webview_window("main") {
                     #[cfg(target_os = "macos")]
                     make_window_transparent(&window);
+
+                    #[cfg(not(target_os = "macos"))]
+                    {
+                        let _ = window.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));
+                    }
                     let _ = window;
                 }
             }

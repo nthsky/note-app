@@ -9,7 +9,6 @@
   --opacity: 0.92;
   --bg-image: none;
   --radius: 18px;
-  --frame-pad: 14px;
   color-scheme: light;
 }
 
@@ -20,7 +19,8 @@
 }
 
 html,
-body {
+body,
+#app {
   margin: 0;
   width: 100%;
   height: 100%;
@@ -29,7 +29,7 @@ body {
 
 body {
   overflow: hidden;
-  padding: var(--frame-pad);
+  padding: 0;
   font-family: "Source Sans 3", "PingFang SC", "Hiragino Sans GB", sans-serif;
   color: var(--ink);
   user-select: none;
@@ -44,9 +44,7 @@ body {
   border-radius: var(--radius);
   overflow: hidden;
   background: transparent;
-  box-shadow:
-    0 10px 28px rgba(40, 28, 8, 0.18),
-    0 1px 0 rgba(255, 255, 255, 0.35) inset;
+  box-shadow: none;
 }
 
 .note::before {
@@ -69,7 +67,7 @@ body {
   inset: 0;
   z-index: 1;
   border-radius: inherit;
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.28);
   pointer-events: none;
 }
 
