@@ -17,11 +17,9 @@ export function unbindWindow(windowLabel: string) {
   localStorage.removeItem(`${WINDOW_BIND_PREFIX}${windowLabel}`);
 }
 
-export async function closeNoteWindow(noteId: string) {
+export async function findWindowForNote(noteId: string) {
   const labeled = await WebviewWindow.getByLabel(windowLabelFor(noteId));
-  if (labeled) {
-    await labeled.destroy();
-  }
+  if (labeled) return labeled;
 
   for (let index = 0; index < localStorage.length; index += 1) {
     const key = localStorage.key(index);
@@ -29,14 +27,32 @@ export async function closeNoteWindow(noteId: string) {
     if (localStorage.getItem(key) !== noteId) continue;
     const label = key.slice(WINDOW_BIND_PREFIX.length);
     const win = await WebviewWindow.getByLabel(label);
-    if (win) {
-      try {
-        await win.destroy();
-      } catch {
-        // ignore
-      }
-    }
+    if (win) return win;
+  }
+  return null;
+}
+
+export async function closeNoteWindow(noteId: string) {
+  const wins = new Set<WebviewWindow>();
+  const labeled = await WebviewWindow.getByLabel(windowLabelFor(noteId));
+  if (labeled) wins.add(labeled);
+
+  for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+    const key = localStorage.key(index);
+    if (!key?.startsWith(WINDOW_BIND_PREFIX)) continue;
+    if (localStorage.getItem(key) !== noteId) continue;
+    const label = key.slice(WINDOW_BIND_PREFIX.length);
+    const win = await WebviewWindow.getByLabel(label);
+    if (win) wins.add(win);
     localStorage.removeItem(key);
+  }
+
+  for (const win of wins) {
+    try {
+      await win.destroy();
+    } catch {
+      // ignore
+    }
   }
 }
 
@@ -79,7 +95,7 @@ export async function openNoteWindow(
   const placement = options.placement ?? "below";
   const focus = options.focus ?? false;
   const label = windowLabelFor(noteId);
-  const existing = await WebviewWindow.getByLabel(label);
+  const existing = await findWindowForNote(noteId);
   if (existing) {
     if (focus) {
       await existing.show();
