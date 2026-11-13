@@ -437,23 +437,27 @@ async function main() {
     await appWindow.setTitle(full);
   };
 
-  const titleMeasureCanvas = document.createElement("canvas");
+  const titleMeasure = document.createElement("span");
+  titleMeasure.setAttribute("aria-hidden", "true");
+  titleMeasure.className = "note-title-measure";
+  document.body.append(titleMeasure);
+
   const fitTitleWidth = () => {
     const value = titleInput.value || defaults.title;
-    const ctx = titleMeasureCanvas.getContext("2d");
-    if (!ctx) {
-      titleInput.style.width = `${Math.max(value.length, 2)}ch`;
-      return;
-    }
     const style = window.getComputedStyle(titleInput);
-    ctx.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
-    const textWidth = ctx.measureText(value).width;
+    titleMeasure.textContent = value;
+    titleMeasure.style.fontFamily = style.fontFamily;
+    titleMeasure.style.fontSize = style.fontSize;
+    titleMeasure.style.fontWeight = style.fontWeight;
+    titleMeasure.style.letterSpacing = style.letterSpacing;
     const pad =
       Number.parseFloat(style.paddingLeft) +
       Number.parseFloat(style.paddingRight) +
       Number.parseFloat(style.borderLeftWidth) +
       Number.parseFloat(style.borderRightWidth);
-    titleInput.style.width = `${Math.ceil(textWidth + pad + 2)}px`;
+    // Extra slack avoids CJK glyph clipping from subpixel rounding.
+    const width = Math.ceil(titleMeasure.getBoundingClientRect().width + pad + 6);
+    titleInput.style.width = `${Math.max(width, 24)}px`;
   };
 
   const renderTitleUi = async ({ persistNow = true } = {}) => {
@@ -532,6 +536,9 @@ async function main() {
   applyTheme(state);
   await renderTitleUi({ persistNow: false });
   await setAlwaysOnTop(state.alwaysOnTop);
+  if (document.fonts?.ready) {
+    void document.fonts.ready.then(() => fitTitleWidth());
+  }
 
   let saveTimer: number | undefined;
 

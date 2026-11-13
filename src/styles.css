@@ -208,7 +208,7 @@ body {
   border-radius: 8px;
   background: transparent;
   outline: none;
-  font-family: Fraunces, "Songti SC", serif;
+  font-family: Fraunces, "Songti SC", "PingFang SC", serif;
   font-size: 15px;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -216,7 +216,7 @@ body {
   cursor: default;
   user-select: none;
   pointer-events: none;
-  field-sizing: content;
+  overflow: visible;
 }
 
 .note-title.is-editing {
@@ -227,8 +227,20 @@ body {
   background: rgba(255, 255, 255, 0.35);
   color: var(--ink);
   box-shadow: 0 0 0 2px rgba(31, 111, 91, 0.12);
-  field-sizing: content;
   min-width: 4ch;
+}
+
+.note-title-measure {
+  position: absolute;
+  top: 0;
+  left: 0;
+  visibility: hidden;
+  pointer-events: none;
+  white-space: pre;
+  font-family: Fraunces, "Songti SC", "PingFang SC", serif;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .edit-title-btn {
