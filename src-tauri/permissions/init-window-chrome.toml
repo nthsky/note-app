@@ -2,3 +2,8 @@
 identifier = "allow-init-window-chrome"
 description = "Allow initializing transparent window chrome"
 commands.allow = ["init_window_chrome"]
+
+[[permission]]
+identifier = "allow-bring-window-to-front"
+description = "Allow forcing a note window above siblings"
+commands.allow = ["bring_window_to_front"]

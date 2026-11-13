@@ -29,6 +29,22 @@ fn make_window_transparent(window: &tauri::WebviewWindow) {
     }
 }
 
+#[cfg(target_os = "macos")]
+fn order_front(window: &tauri::WebviewWindow) {
+    use objc::runtime::Object;
+    use objc::{msg_send, sel, sel_impl};
+    use std::ptr;
+
+    if let Ok(ns_window) = window.ns_window() {
+        unsafe {
+            let ns_window = ns_window as *mut Object;
+            let nil: *mut Object = ptr::null_mut();
+            let _: () = msg_send![ns_window, makeKeyAndOrderFront: nil];
+            let _: () = msg_send![ns_window, orderFrontRegardless];
+        }
+    }
+}
+
 #[tauri::command]
 fn init_window_chrome(window: tauri::WebviewWindow) {
     #[cfg(target_os = "macos")]
@@ -40,10 +56,29 @@ fn init_window_chrome(window: tauri::WebviewWindow) {
     }
 }
 
+#[tauri::command]
+fn bring_window_to_front(app: tauri::AppHandle, label: String) -> Result<(), String> {
+    use tauri::Manager;
+
+    let window = app
+        .get_webview_window(&label)
+        .ok_or_else(|| format!("window not found: {label}"))?;
+
+    #[cfg(target_os = "macos")]
+    order_front(&window);
+
+    window
+        .set_focus()
+        .map_err(|error| format!("failed to focus window: {error}"))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![init_window_chrome])
+        .invoke_handler(tauri::generate_handler![
+            init_window_chrome,
+            bring_window_to_front
+        ])
         .setup(|app| {
             #[cfg(desktop)]
             {
