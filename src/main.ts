@@ -455,8 +455,8 @@ async function main() {
       Number.parseFloat(style.paddingRight) +
       Number.parseFloat(style.borderLeftWidth) +
       Number.parseFloat(style.borderRightWidth);
-    // Extra slack avoids CJK glyph clipping from subpixel rounding.
-    const width = Math.ceil(titleMeasure.getBoundingClientRect().width + pad + 6);
+    // Tiny slack avoids subpixel clipping without leaving a large gap.
+    const width = Math.ceil(titleMeasure.getBoundingClientRect().width + pad + 2);
     titleInput.style.width = `${Math.max(width, 24)}px`;
   };
 

@@ -99,7 +99,7 @@ body {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 0;
   max-width: 100%;
   min-width: 0;
   vertical-align: middle;
@@ -203,7 +203,7 @@ body {
   min-width: 2ch;
   max-width: 100%;
   margin: 0;
-  padding: 2px 4px;
+  padding: 2px 1px 2px 4px;
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
@@ -245,6 +245,9 @@ body {
 
 .edit-title-btn {
   flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  margin-left: 0;
   opacity: 0;
   pointer-events: none;
   transition:
