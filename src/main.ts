@@ -808,7 +808,8 @@ async function main() {
   btnMinimize.addEventListener("click", () => appWindow.minimize());
   btnClose.addEventListener("click", async () => {
     markClosed();
-    await appWindow.close();
+    // destroy bypasses close-requested recirculation and reliably closes.
+    await appWindow.destroy();
   });
 
   await appWindow.onCloseRequested(() => {
