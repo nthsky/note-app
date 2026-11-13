@@ -84,12 +84,38 @@ body {
   cursor: grabbing;
 }
 
-.brand {
+.titlebar-left {
+  flex: 1;
+  min-width: 0;
+}
+
+.note-title {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 2px 6px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  outline: none;
   font-family: Fraunces, "Songti SC", serif;
   font-size: 15px;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: var(--ink-soft);
+  cursor: text;
+  user-select: text;
+}
+
+.note-title:hover {
+  background: rgba(42, 36, 24, 0.05);
+}
+
+.note-title:focus {
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.35);
+  color: var(--ink);
+  box-shadow: 0 0 0 2px rgba(31, 111, 91, 0.12);
 }
 
 .titlebar-actions {

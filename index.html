@@ -16,7 +16,16 @@
     <div id="app" class="note">
       <header class="titlebar" data-tauri-drag-region>
         <div class="titlebar-left" data-tauri-drag-region>
-          <span class="brand" data-tauri-drag-region>便签</span>
+          <input
+            id="note-title"
+            class="note-title"
+            type="text"
+            value="便签"
+            maxlength="40"
+            spellcheck="false"
+            aria-label="便签标题"
+            title="点击编辑标题"
+          />
         </div>
         <div class="titlebar-actions">
           <button

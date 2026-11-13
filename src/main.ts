@@ -3,6 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 const STORAGE_KEY = "sticky-note-v1";
 
 type NoteState = {
+  title: string;
   content: string;
   opacity: number;
   bgColor: string;
@@ -11,6 +12,7 @@ type NoteState = {
 };
 
 const defaults: NoteState = {
+  title: "便签",
   content: "",
   opacity: 92,
   bgColor: "#ffe08a",
@@ -93,6 +95,7 @@ async function main() {
   const appWindow = getCurrentWindow();
   const state = loadState();
 
+  const titleInput = document.querySelector<HTMLInputElement>("#note-title");
   const editor = document.querySelector<HTMLTextAreaElement>("#editor");
   const settings = document.querySelector<HTMLElement>("#settings");
   const opacityInput = document.querySelector<HTMLInputElement>("#opacity");
@@ -110,6 +113,7 @@ async function main() {
   const btnClearBg = document.querySelector<HTMLButtonElement>("#btn-clear-bg");
 
   if (
+    !titleInput ||
     !editor ||
     !settings ||
     !opacityInput ||
@@ -142,14 +146,62 @@ async function main() {
     await appWindow.setAlwaysOnTop(on);
   };
 
+  const normalizeTitle = (value: string) => {
+    const trimmed = value.trim();
+    return trimmed || defaults.title;
+  };
+
+  const commitTitle = async (value: string, { persistNow = true } = {}) => {
+    const title = normalizeTitle(value);
+    state.title = title;
+    titleInput.value = title;
+    document.title = title;
+    if (persistNow) persist();
+    await appWindow.setTitle(title);
+  };
+
+  titleInput.value = state.title;
   editor.value = state.content;
   opacityInput.value = String(state.opacity);
   opacityValue.value = `${state.opacity}%`;
   bgColorInput.value = state.bgColor;
   applyTheme(state);
+  await commitTitle(state.title, { persistNow: false });
   await setAlwaysOnTop(state.alwaysOnTop);
 
   let saveTimer: number | undefined;
+  let titleTimer: number | undefined;
+
+  titleInput.addEventListener("pointerdown", (event) => {
+    event.stopPropagation();
+  });
+
+  titleInput.addEventListener("input", () => {
+    const draft = titleInput.value;
+    state.title = draft;
+    document.title = normalizeTitle(draft);
+    window.clearTimeout(titleTimer);
+    titleTimer = window.setTimeout(() => {
+      void appWindow.setTitle(normalizeTitle(draft));
+      persist();
+    }, 250);
+  });
+
+  titleInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      titleInput.blur();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      titleInput.value = normalizeTitle(state.title);
+      titleInput.blur();
+    }
+  });
+
+  titleInput.addEventListener("blur", () => {
+    void commitTitle(titleInput.value);
+  });
+
   editor.addEventListener("input", () => {
     state.content = editor.value;
     window.clearTimeout(saveTimer);
