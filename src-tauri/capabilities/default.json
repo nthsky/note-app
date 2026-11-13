@@ -2,7 +2,11 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for sticky note windows",
-  "windows": ["main", "note-*", "manager"],
+  "windows": [
+    "main",
+    "note-*",
+    "manager"
+  ],
   "permissions": [
     "core:default",
     "allow-init-window-chrome",
@@ -21,6 +25,7 @@
     "core:window:allow-set-position",
     "core:window:allow-outer-size",
     "core:window:allow-set-size",
-    "core:window:allow-get-all-windows"
+    "core:window:allow-get-all-windows",
+    "dialog:default"
   ]
 }

@@ -1,3 +1,4 @@
+import { confirm } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   createBlankNote,
@@ -127,7 +128,14 @@ async function main() {
     const store = loadStore();
     const note = store.notes[id];
     if (!note) return;
-    const ok = window.confirm(`删除「${displayTitle(note)}」？此操作不可恢复。`);
+
+    // macOS WKWebView: window.confirm is a silent no-op that returns false.
+    const ok = await confirm(`删除「${displayTitle(note)}」？此操作不可恢复。`, {
+      title: "删除便签",
+      kind: "warning",
+      okLabel: "删除",
+      cancelLabel: "取消",
+    });
     if (!ok) return;
 
     try {
@@ -136,9 +144,10 @@ async function main() {
       // window may already be closed
     }
 
-    delete store.notes[id];
-    store.openIds = store.openIds.filter((item) => item !== id);
-    saveStore(store);
+    const latest = loadStore();
+    delete latest.notes[id];
+    latest.openIds = latest.openIds.filter((item) => item !== id);
+    saveStore(latest);
     if (selectedId === id) selectedId = null;
     render();
   };

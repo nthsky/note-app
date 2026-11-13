@@ -43,6 +43,7 @@ fn init_window_chrome(window: tauri::WebviewWindow) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![init_window_chrome])
         .setup(|app| {
             #[cfg(desktop)]
