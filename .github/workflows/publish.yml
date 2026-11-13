@@ -60,8 +60,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: app-v__VERSION__
-          releaseName: 便签 v__VERSION__
-          releaseBody: 下载对应平台的安装包即可使用。Windows 请使用 .exe / .msi。
+          releaseName: NoteApp v__VERSION__
+          releaseBody: Sticky note desktop app. Download the installer for your platform (Windows: .exe / .msi).
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
