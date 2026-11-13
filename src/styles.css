@@ -30,7 +30,9 @@ body,
 body {
   overflow: hidden;
   padding: 0;
-  font-family: "Source Sans 3", "PingFang SC", "Hiragino Sans GB", sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC",
+    "Hiragino Sans GB", "Helvetica Neue", sans-serif;
   color: var(--ink);
   user-select: none;
 }
@@ -208,10 +210,12 @@ body {
   border-radius: 8px;
   background: transparent;
   outline: none;
-  font-family: Fraunces, "Songti SC", "PingFang SC", serif;
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC",
+    "Hiragino Sans GB", "Helvetica Neue", sans-serif;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   color: var(--ink-soft);
   cursor: default;
   user-select: none;
@@ -237,10 +241,12 @@ body {
   visibility: hidden;
   pointer-events: none;
   white-space: pre;
-  font-family: Fraunces, "Songti SC", "PingFang SC", serif;
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC",
+    "Hiragino Sans GB", "Helvetica Neue", sans-serif;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .edit-title-btn {
@@ -419,8 +425,8 @@ body {
   outline: none;
   background: transparent;
   color: var(--ink);
-  font: 500 16px/1.55 "Source Sans 3", "PingFang SC", "Hiragino Sans GB",
-    sans-serif;
+  font: 400 16px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text",
+    "PingFang SC", "Hiragino Sans GB", "Helvetica Neue", sans-serif;
   user-select: text;
   caret-color: var(--accent);
 }
