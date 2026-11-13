@@ -15,6 +15,9 @@
         </div>
         <div class="manager-actions">
           <button type="button" id="btn-new" class="primary-btn">新建</button>
+          <button type="button" id="btn-batch-delete" class="danger-btn" disabled>
+            删除所选
+          </button>
           <button type="button" id="btn-refresh" class="ghost-btn">刷新</button>
           <button
             type="button"
@@ -47,6 +50,14 @@
         <table class="manager-table">
           <thead>
             <tr>
+              <th class="col-check">
+                <input
+                  id="check-all"
+                  type="checkbox"
+                  title="全选"
+                  aria-label="全选"
+                />
+              </th>
               <th class="col-icon"></th>
               <th class="col-title">标题</th>
               <th class="col-preview">预览</th>
