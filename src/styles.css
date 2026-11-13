@@ -77,6 +77,7 @@ body {
 }
 
 .titlebar {
+  z-index: 40;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -129,7 +130,7 @@ body {
   position: absolute;
   top: calc(100% + 6px);
   left: 0;
-  z-index: 20;
+  z-index: 50;
   display: grid;
   grid-template-columns: repeat(6, 1fr);
   gap: 2px;
