@@ -366,11 +366,19 @@ function setUrlNoteId(noteId: string) {
   window.history.replaceState({}, "", url);
 }
 
-async function openNoteWindow(noteId: string, offset = { x: 28, y: 28 }) {
+async function openNoteWindow(
+  noteId: string,
+  offset = { x: 28, y: 28 },
+  options: { bringToFront?: boolean } = {},
+) {
+  const bringToFront = options.bringToFront ?? true;
   const label = windowLabelFor(noteId);
   const existing = await WebviewWindow.getByLabel(label);
   if (existing) {
-    await existing.setFocus();
+    if (bringToFront) {
+      await existing.show();
+      await existing.setFocus();
+    }
     return existing;
   }
 
@@ -385,7 +393,7 @@ async function openNoteWindow(noteId: string, offset = { x: 28, y: 28 }) {
     // ignore
   }
 
-  return new WebviewWindow(label, {
+  const win = new WebviewWindow(label, {
     url: `index.html?id=${noteId}`,
     title: "便签",
     width: 360,
@@ -396,10 +404,31 @@ async function openNoteWindow(noteId: string, offset = { x: 28, y: 28 }) {
     decorations: false,
     transparent: true,
     shadow: false,
+    focus: bringToFront,
+    visible: true,
     center: x === undefined,
     x,
     y,
   });
+
+  await new Promise<void>((resolve, reject) => {
+    const timeout = window.setTimeout(() => resolve(), 1500);
+    win.once("tauri://created", () => {
+      window.clearTimeout(timeout);
+      resolve();
+    });
+    win.once("tauri://error", (event) => {
+      window.clearTimeout(timeout);
+      reject(event);
+    });
+  });
+
+  if (bringToFront) {
+    await win.show();
+    await win.setFocus();
+  }
+
+  return win;
 }
 
 function displayTitle(state: Pick<NoteState, "emoji" | "title">) {
@@ -679,7 +708,11 @@ async function main() {
     const siblings = store.openIds.filter((id) => id !== noteId);
     for (const [index, id] of siblings.entries()) {
       try {
-        await openNoteWindow(id, { x: 28 * (index + 1), y: 28 * (index + 1) });
+        await openNoteWindow(
+          id,
+          { x: 28 * (index + 1), y: 28 * (index + 1) },
+          { bringToFront: false },
+        );
       } catch (error) {
         console.error("failed to restore note window", id, error);
       }
@@ -784,7 +817,7 @@ async function main() {
     saveStore(latest);
     Object.assign(store, latest);
     try {
-      await openNoteWindow(id);
+      await openNoteWindow(id, { x: 36, y: 36 }, { bringToFront: true });
     } catch (error) {
       console.error("failed to create note window", error);
       window.alert("新建便签失败，请重试");
