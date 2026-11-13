@@ -358,6 +358,7 @@ async function main() {
   bindWindowToNote(appWindow.label, noteId);
   const state = store.notes[noteId];
 
+  const app = document.querySelector<HTMLElement>("#app");
   const titleInput = document.querySelector<HTMLInputElement>("#note-title");
   const btnEmoji = document.querySelector<HTMLButtonElement>("#btn-emoji");
   const emojiPicker = document.querySelector<HTMLElement>("#emoji-picker");
@@ -382,6 +383,7 @@ async function main() {
   const btnClearBg = document.querySelector<HTMLButtonElement>("#btn-clear-bg");
 
   if (
+    !app ||
     !titleInput ||
     !btnEmoji ||
     !emojiPicker ||
@@ -679,8 +681,12 @@ async function main() {
     const open = settings.hasAttribute("hidden");
     if (open) {
       settings.removeAttribute("hidden");
+      editor.setAttribute("hidden", "");
+      app.classList.add("settings-open");
     } else {
       settings.setAttribute("hidden", "");
+      editor.removeAttribute("hidden");
+      app.classList.remove("settings-open");
     }
     btnSettings.setAttribute("aria-pressed", String(open));
   });

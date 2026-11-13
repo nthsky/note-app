@@ -333,6 +333,18 @@ body {
   display: none;
 }
 
+.note.settings-open .editor,
+.editor[hidden] {
+  display: none;
+}
+
+.note.settings-open .settings {
+  flex: 1;
+  margin-bottom: 12px;
+  align-content: start;
+  overflow: auto;
+}
+
 @keyframes rise {
   from {
     opacity: 0;
