@@ -5,6 +5,7 @@ import {
   applyForeColor,
   contentToHtml,
   isEditorEmpty,
+  normalizeFontSizeTree,
   readFormatState,
   saveEditorRange,
   sanitizeHtml,
@@ -562,6 +563,7 @@ async function main() {
   titleInput.value = state.title;
   btnEmoji.textContent = state.emoji;
   editor.innerHTML = contentToHtml(state.content);
+  normalizeFontSizeTree(editor);
   editor.classList.toggle("is-empty", isEditorEmpty(editor));
   opacityInput.value = String(state.opacity);
   opacityValue.value = `${state.opacity}%`;

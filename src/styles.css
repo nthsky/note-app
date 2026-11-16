@@ -559,7 +559,7 @@ body {
 
 .editor span,
 .editor font {
-  /* Keep unitless line-height so shrinking font-size also shrinks the strut. */
+  /* Unitless so descendants inherit a factor, not a stuck large px line-height. */
   line-height: 1.55;
 }
 
