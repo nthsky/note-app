@@ -5,6 +5,7 @@ import {
   applyTextStyle,
   cleanupEditorStructure,
   contentToHtml,
+  ensureEditableBlock,
   handleListKeydown,
   handleMarkdownListShortcut,
   isEditorEmpty,
@@ -798,6 +799,7 @@ async function main() {
   });
 
   editor.addEventListener("input", () => {
+    ensureEditableBlock(editor);
     if (editor.querySelector("ul.todo-list")) normalizeTodoLists(editor);
     persistEditor();
   });

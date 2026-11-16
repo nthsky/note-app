@@ -161,16 +161,47 @@ function isBlankBlock(node: Node) {
 export function isEditorEmpty(editor: HTMLElement) {
   const text = (editor.textContent ?? "").replace(/\u200B/g, "").trim();
   if (text.length > 0) return false;
-  // Lists/todos count as content even before any text is typed,
-  // otherwise the placeholder overlays the checklist UI.
-  if (editor.querySelector("ul, ol")) return false;
-  // Multiple blank blocks mean the user pressed Enter — keep them and
-  // hide the placeholder instead of treating the note as empty.
-  const blocks = Array.from(editor.children).filter((el) =>
-    ["DIV", "P", "UL", "OL", "LI"].includes(el.tagName),
-  );
-  if (blocks.length > 1) return false;
+  // Structural content should hide the placeholder even before typing.
+  if (editor.querySelector("ul, ol, h1, h2, h3, h4, .todo-check")) return false;
   return true;
+}
+
+/** Make sure the caret sits in a real block after select-all delete / odd WebKit leftovers. */
+export function ensureEditableBlock(editor: HTMLElement): HTMLElement | null {
+  const marker = selectionInEditor(editor);
+  const current = closestBlock(marker?.range.startContainer ?? null, editor);
+  if (current && current !== editor) return current;
+
+  const hasBlock = Boolean(
+    editor.querySelector("div, p, h1, h2, h3, h4, ul, ol"),
+  );
+  if (!hasBlock) {
+    // Loose text/br or fully empty — wrap into a single div.
+    const div = document.createElement("div");
+    while (editor.firstChild) div.append(editor.firstChild);
+    if (!div.childNodes.length) div.append(document.createElement("br"));
+    editor.append(div);
+    placeCaretInBlock(div);
+    return div;
+  }
+
+  // Caret orphaned (e.g. directly on editor); move into the nearest block.
+  const fallback =
+    (editor.firstElementChild as HTMLElement | null) ??
+    (editor.querySelector("div, p, h1, h2, h3, h4") as HTMLElement | null);
+  if (fallback) {
+    if (fallback.tagName === "UL" || fallback.tagName === "OL") {
+      const li = fallback.querySelector("li");
+      if (li instanceof HTMLLIElement) {
+        focusListItemContent(li);
+        return li;
+      }
+    }
+    placeCaretInBlock(fallback);
+    return fallback;
+  }
+  resetEmptyEditor(editor);
+  return editor.firstElementChild as HTMLElement | null;
 }
 
 function placeCaretInBlock(block: HTMLElement, atEnd = false) {
@@ -501,10 +532,26 @@ export function handleMarkdownListShortcut(
   // Only trigger outside existing lists (keep typing normal inside items).
   if (closestList(marker.range.startContainer, editor)) return false;
 
-  const block = closestBlock(marker.range.startContainer, editor);
+  const block = ensureEditableBlock(editor);
   if (!block || block === editor) return false;
+  // Re-read selection after possible structure repair.
+  const live = selectionInEditor(editor);
+  if (!live || !live.range.collapsed) return false;
+  if (!block.contains(live.range.startContainer) && block !== live.range.startContainer) {
+    // Caret was moved into the repaired block.
+  }
 
-  const prefix = prefixBeforeCaret(block, marker.range).trimEnd();
+  const prefix = prefixBeforeCaret(
+    block,
+    block.contains(live.range.startContainer) || block === live.range.startContainer
+      ? live.range
+      : (() => {
+          const r = document.createRange();
+          r.selectNodeContents(block);
+          r.collapse(false);
+          return r;
+        })(),
+  ).trimEnd();
 
   const headingMatch = prefix.match(/^(#{1,4})$/);
   if (headingMatch) {
@@ -512,7 +559,9 @@ export function handleMarkdownListShortcut(
 
     const wipe = document.createRange();
     wipe.selectNodeContents(block);
-    wipe.setEnd(marker.range.startContainer, marker.range.startOffset);
+    if (block.contains(live.range.startContainer) || block === live.range.startContainer) {
+      wipe.setEnd(live.range.startContainer, live.range.startOffset);
+    }
     wipe.deleteContents();
 
     const rest = (block.textContent ?? "").replace(/\u200B/g, "");
@@ -544,7 +593,9 @@ export function handleMarkdownListShortcut(
 
   const wipe = document.createRange();
   wipe.selectNodeContents(block);
-  wipe.setEnd(marker.range.startContainer, marker.range.startOffset);
+  if (block.contains(live.range.startContainer) || block === live.range.startContainer) {
+    wipe.setEnd(live.range.startContainer, live.range.startOffset);
+  }
   wipe.deleteContents();
 
   // Keep any text that was typed after the markdown marker.
