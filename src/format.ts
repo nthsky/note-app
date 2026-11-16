@@ -12,6 +12,10 @@ const ALLOWED_TAGS = new Set([
   "DIV",
   "P",
   "BR",
+  "UL",
+  "OL",
+  "LI",
+  "INPUT",
 ]);
 
 const ALLOWED_STYLES = new Set([
@@ -21,6 +25,13 @@ const ALLOWED_STYLES = new Set([
   "font-style",
   "text-decoration",
   "text-decoration-line",
+]);
+
+const ALLOWED_CLASSES = new Set([
+  "todo-list",
+  "todo-item",
+  "todo-text",
+  "is-checked",
 ]);
 
 export const FONT_SIZES = ["12", "14", "16", "18", "20", "24", "28", "32"];
@@ -47,6 +58,14 @@ export function sanitizeHtml(html: string) {
           el.replaceWith(...Array.from(el.childNodes));
           continue;
         }
+        if (el.tagName === "INPUT") {
+          const type = (el.getAttribute("type") || "").toLowerCase();
+          if (type !== "checkbox") {
+            el.remove();
+            continue;
+          }
+        }
+
         for (const attr of Array.from(el.attributes)) {
           const name = attr.name.toLowerCase();
           if (name === "style") {
@@ -59,12 +78,31 @@ export function sanitizeHtml(html: string) {
             }
             if (kept.length) el.setAttribute("style", kept.join("; "));
             else el.removeAttribute("style");
+          } else if (name === "class") {
+            const kept = attr.value
+              .split(/\s+/)
+              .filter(
+                (item) =>
+                  ALLOWED_CLASSES.has(item) || item.startsWith("fs-"),
+              );
+            if (kept.length) el.setAttribute("class", kept.join(" "));
+            else el.removeAttribute("class");
           } else if (
-            !(el.tagName === "FONT" && (name === "color" || name === "size"))
+            (el.tagName === "FONT" && (name === "color" || name === "size")) ||
+            (el.tagName === "INPUT" &&
+              (name === "type" || name === "checked" || name === "contenteditable"))
           ) {
+            // keep
+          } else {
             el.removeAttribute(attr.name);
           }
         }
+
+        if (el.tagName === "INPUT") {
+          el.setAttribute("type", "checkbox");
+          el.setAttribute("contenteditable", "false");
+        }
+
         walk(el);
       } else if (child.nodeType === Node.COMMENT_NODE) {
         child.parentNode?.removeChild(child);
@@ -462,7 +500,259 @@ export type FormatState = {
   strike: boolean;
   color: string;
   fontSize: string;
+  bullet: boolean;
+  ordered: boolean;
+  todo: boolean;
 };
+
+function closestList(
+  node: Node | null,
+  editor: HTMLElement,
+): HTMLUListElement | HTMLOListElement | null {
+  let current =
+    node?.nodeType === Node.ELEMENT_NODE
+      ? (node as HTMLElement)
+      : node?.parentElement ?? null;
+  while (current && current !== editor) {
+    if (current.tagName === "UL" || current.tagName === "OL") {
+      return current as HTMLUListElement | HTMLOListElement;
+    }
+    current = current.parentElement;
+  }
+  return null;
+}
+
+function closestListItem(node: Node | null, editor: HTMLElement) {
+  let current =
+    node?.nodeType === Node.ELEMENT_NODE
+      ? (node as HTMLElement)
+      : node?.parentElement ?? null;
+  while (current && current !== editor) {
+    if (current.tagName === "LI") return current as HTMLLIElement;
+    current = current.parentElement;
+  }
+  return null;
+}
+
+function stripTodoChrome(li: HTMLLIElement) {
+  const checkbox = li.querySelector(":scope > input[type='checkbox']");
+  const text = li.querySelector(":scope > .todo-text");
+  if (text) {
+    li.replaceChildren(...Array.from(text.childNodes));
+  } else if (checkbox) {
+    checkbox.remove();
+  }
+  li.classList.remove("todo-item", "is-checked");
+}
+
+function ensureTodoItem(li: HTMLLIElement) {
+  li.classList.add("todo-item");
+  let checkbox = li.querySelector(
+    ":scope > input[type='checkbox']",
+  ) as HTMLInputElement | null;
+  let text = li.querySelector(":scope > .todo-text") as HTMLElement | null;
+
+  if (!checkbox) {
+    checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+  }
+  checkbox.contentEditable = "false";
+  checkbox.tabIndex = -1;
+  checkbox.setAttribute("contenteditable", "false");
+
+  if (!text) {
+    text = document.createElement("span");
+    text.className = "todo-text";
+    for (const child of Array.from(li.childNodes)) {
+      if (child === checkbox) continue;
+      if (child instanceof HTMLInputElement && child.type === "checkbox") {
+        continue;
+      }
+      text.append(child);
+    }
+  }
+
+  if (
+    !(text.textContent ?? "").replace(/\u200B/g, "").trim() &&
+    !text.querySelector("br")
+  ) {
+    text.append(document.createElement("br"));
+  }
+
+  const alreadyOk =
+    li.firstChild === checkbox &&
+    checkbox.nextSibling === text &&
+    li.childNodes.length === 2;
+  if (!alreadyOk) {
+    li.replaceChildren(checkbox, text);
+  }
+  li.classList.toggle("is-checked", checkbox.checked);
+}
+
+function convertListToTodo(list: HTMLUListElement | HTMLOListElement) {
+  let ul: HTMLUListElement;
+  if (list.tagName === "OL") {
+    ul = document.createElement("ul");
+    while (list.firstChild) ul.append(list.firstChild);
+    list.replaceWith(ul);
+  } else {
+    ul = list as HTMLUListElement;
+  }
+  ul.classList.add("todo-list");
+  for (const li of Array.from(ul.children)) {
+    if (li instanceof HTMLLIElement) ensureTodoItem(li);
+  }
+  return ul;
+}
+
+function convertTodoToList(
+  list: HTMLUListElement,
+  kind: "ul" | "ol",
+) {
+  for (const li of Array.from(list.children)) {
+    if (li instanceof HTMLLIElement) stripTodoChrome(li);
+  }
+  list.classList.remove("todo-list");
+  if (kind === "ol") {
+    const ol = document.createElement("ol");
+    while (list.firstChild) ol.append(list.firstChild);
+    list.replaceWith(ol);
+    return ol;
+  }
+  return list;
+}
+
+export function normalizeTodoLists(editor: HTMLElement) {
+  for (const ul of Array.from(editor.querySelectorAll("ul.todo-list"))) {
+    for (const li of Array.from(ul.children)) {
+      if (li instanceof HTMLLIElement) ensureTodoItem(li);
+    }
+  }
+  for (const input of Array.from(
+    editor.querySelectorAll("ul.todo-list input[type='checkbox']"),
+  )) {
+    input.setAttribute("contenteditable", "false");
+    (input as HTMLInputElement).tabIndex = -1;
+  }
+}
+
+export function toggleBulletList(editor: HTMLElement) {
+  focusEditor(editor);
+  const marker = selectionInEditor(editor);
+  const list = closestList(marker?.range.startContainer ?? null, editor);
+
+  if (list?.classList.contains("todo-list")) {
+    convertTodoToList(list as HTMLUListElement, "ul");
+    return;
+  }
+
+  document.execCommand("insertUnorderedList", false);
+  const next = closestList(
+    window.getSelection()?.anchorNode ?? null,
+    editor,
+  );
+  next?.classList.remove("todo-list");
+  if (next) {
+    for (const li of Array.from(next.querySelectorAll("li.todo-item"))) {
+      stripTodoChrome(li as HTMLLIElement);
+    }
+  }
+}
+
+export function toggleOrderedList(editor: HTMLElement) {
+  focusEditor(editor);
+  const marker = selectionInEditor(editor);
+  const list = closestList(marker?.range.startContainer ?? null, editor);
+
+  if (list?.classList.contains("todo-list")) {
+    convertTodoToList(list as HTMLUListElement, "ol");
+    return;
+  }
+
+  document.execCommand("insertOrderedList", false);
+  const next = closestList(
+    window.getSelection()?.anchorNode ?? null,
+    editor,
+  );
+  if (next?.classList.contains("todo-list")) {
+    convertTodoToList(next as HTMLUListElement, "ol");
+  }
+}
+
+export function toggleTodoList(editor: HTMLElement) {
+  focusEditor(editor);
+  const marker = selectionInEditor(editor);
+  const list = closestList(marker?.range.startContainer ?? null, editor);
+
+  if (list?.classList.contains("todo-list")) {
+    // Turn off: unwrap to plain blocks via native toggle after stripping.
+    convertTodoToList(list as HTMLUListElement, "ul");
+    document.execCommand("insertUnorderedList", false);
+    return;
+  }
+
+  if (list) {
+    convertListToTodo(list);
+    return;
+  }
+
+  document.execCommand("insertUnorderedList", false);
+  const created = closestList(
+    window.getSelection()?.anchorNode ?? null,
+    editor,
+  );
+  if (created) convertListToTodo(created);
+}
+
+export function handleTodoEnterKey(
+  editor: HTMLElement,
+  event: KeyboardEvent,
+): boolean {
+  if (event.key !== "Enter" || event.shiftKey || event.isComposing) return false;
+  const marker = selectionInEditor(editor);
+  if (!marker) return false;
+  const li = closestListItem(marker.range.startContainer, editor);
+  const list = li ? closestList(li, editor) : null;
+  if (!li || !list?.classList.contains("todo-list")) return false;
+
+  const text = li.querySelector(".todo-text") as HTMLElement | null;
+  const empty = !(text?.textContent ?? "").replace(/\u200B/g, "").trim();
+
+  if (empty) {
+    event.preventDefault();
+    // Exit todo list: replace empty item with a blank div after the list.
+    const block = document.createElement("div");
+    block.append(document.createElement("br"));
+    if (list.children.length === 1) {
+      list.replaceWith(block);
+    } else {
+      li.remove();
+      list.after(block);
+    }
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(block, 0);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    return true;
+  }
+
+  event.preventDefault();
+  const next = document.createElement("li");
+  ensureTodoItem(next);
+  li.after(next);
+  const nextText = next.querySelector(".todo-text");
+  if (nextText) {
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.setStart(nextText, 0);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  }
+  return true;
+}
 
 export function readFormatState(editor: HTMLElement): FormatState {
   const marker = selectionInEditor(editor);
@@ -471,6 +761,8 @@ export function readFormatState(editor: HTMLElement): FormatState {
     editor,
   );
   const deco = `${style?.textDecorationLine ?? ""} ${style?.textDecoration ?? ""}`;
+  const list = closestList(marker?.range.startContainer ?? null, editor);
+  const inTodo = Boolean(list?.classList.contains("todo-list"));
   return {
     bold: document.queryCommandState("bold"),
     italic: document.queryCommandState("italic"),
@@ -481,5 +773,14 @@ export function readFormatState(editor: HTMLElement): FormatState {
       /\bline-through\b/.test(deco),
     color: rgbToHex(style?.color ?? "#2a2418"),
     fontSize: closestFontSize(Number.parseFloat(style?.fontSize ?? "16") || 16),
+    bullet:
+      !inTodo &&
+      (document.queryCommandState("insertUnorderedList") ||
+        list?.tagName === "UL"),
+    ordered:
+      !inTodo &&
+      (document.queryCommandState("insertOrderedList") ||
+        list?.tagName === "OL"),
+    todo: inTodo,
   };
 }

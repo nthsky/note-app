@@ -457,6 +457,53 @@ body {
   color: var(--accent);
 }
 
+.fmt-btn-icon svg {
+  display: block;
+}
+
+.editor ul,
+.editor ol {
+  margin: 4px 0;
+  padding-left: 1.35em;
+}
+
+.editor li {
+  margin: 2px 0;
+}
+
+.editor ul.todo-list {
+  list-style: none;
+  padding-left: 0.15em;
+}
+
+.editor ul.todo-list > li.todo-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 4px 0;
+}
+
+.editor ul.todo-list > li.todo-item > input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  margin: 0.35em 0 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.editor ul.todo-list > li.todo-item > .todo-text {
+  flex: 1;
+  min-width: 0;
+  outline: none;
+}
+
+.editor ul.todo-list > li.todo-item.is-checked > .todo-text {
+  color: var(--ink-faint);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
 @keyframes rise {
   from {
     opacity: 0;

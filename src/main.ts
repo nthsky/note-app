@@ -4,12 +4,17 @@ import {
   applyFontSize,
   applyForeColor,
   contentToHtml,
+  handleTodoEnterKey,
   isEditorEmpty,
   normalizeFontSizeTree,
+  normalizeTodoLists,
   readFormatState,
   saveEditorRange,
   sanitizeHtml,
+  toggleBulletList,
   toggleFormat,
+  toggleOrderedList,
+  toggleTodoList,
 } from "./format";
 import {
   createBlankNote,
@@ -384,6 +389,9 @@ async function main() {
   const fmtUnderline =
     document.querySelector<HTMLButtonElement>("#fmt-underline");
   const fmtStrike = document.querySelector<HTMLButtonElement>("#fmt-strike");
+  const fmtBullet = document.querySelector<HTMLButtonElement>("#fmt-bullet");
+  const fmtOrdered = document.querySelector<HTMLButtonElement>("#fmt-ordered");
+  const fmtTodo = document.querySelector<HTMLButtonElement>("#fmt-todo");
   const settings = document.querySelector<HTMLElement>("#settings");
   const opacityInput = document.querySelector<HTMLInputElement>("#opacity");
   const opacityValue = document.querySelector<HTMLOutputElement>("#opacity-value");
@@ -415,6 +423,9 @@ async function main() {
     !fmtItalic ||
     !fmtUnderline ||
     !fmtStrike ||
+    !fmtBullet ||
+    !fmtOrdered ||
+    !fmtTodo ||
     !settings ||
     !opacityInput ||
     !opacityValue ||
@@ -564,6 +575,7 @@ async function main() {
   btnEmoji.textContent = state.emoji;
   editor.innerHTML = contentToHtml(state.content);
   normalizeFontSizeTree(editor);
+  normalizeTodoLists(editor);
   editor.classList.toggle("is-empty", isEditorEmpty(editor));
   opacityInput.value = String(state.opacity);
   opacityValue.value = `${state.opacity}%`;
@@ -674,6 +686,9 @@ async function main() {
     fmtItalic.setAttribute("aria-pressed", String(format.italic));
     fmtUnderline.setAttribute("aria-pressed", String(format.underline));
     fmtStrike.setAttribute("aria-pressed", String(format.strike));
+    fmtBullet.setAttribute("aria-pressed", String(format.bullet));
+    fmtOrdered.setAttribute("aria-pressed", String(format.ordered));
+    fmtTodo.setAttribute("aria-pressed", String(format.todo));
     if (document.activeElement !== fmtColor) {
       fmtColor.value = format.color;
     }
@@ -688,7 +703,15 @@ async function main() {
 
   // Buttons need preventDefault so the editor selection isn't cleared.
   // Native <select>/<input type=color> must NOT preventDefault or they won't open.
-  for (const control of [fmtBold, fmtItalic, fmtUnderline, fmtStrike]) {
+  for (const control of [
+    fmtBold,
+    fmtItalic,
+    fmtUnderline,
+    fmtStrike,
+    fmtBullet,
+    fmtOrdered,
+    fmtTodo,
+  ]) {
     control.addEventListener("mousedown", keepSelection);
   }
 
@@ -722,6 +745,24 @@ async function main() {
     persistEditor();
     syncFormatToolbar();
   });
+  fmtBullet.addEventListener("click", () => {
+    toggleBulletList(editor);
+    normalizeTodoLists(editor);
+    persistEditor();
+    syncFormatToolbar();
+  });
+  fmtOrdered.addEventListener("click", () => {
+    toggleOrderedList(editor);
+    normalizeTodoLists(editor);
+    persistEditor();
+    syncFormatToolbar();
+  });
+  fmtTodo.addEventListener("click", () => {
+    toggleTodoList(editor);
+    normalizeTodoLists(editor);
+    persistEditor();
+    syncFormatToolbar();
+  });
   fmtSize.addEventListener("change", () => {
     applyFontSize(editor, fmtSize.value, savedRange);
     savedRange = saveEditorRange(editor);
@@ -741,9 +782,29 @@ async function main() {
     syncFormatToolbar();
   });
 
-  editor.addEventListener("input", persistEditor);
+  editor.addEventListener("input", () => {
+    if (editor.querySelector("ul.todo-list")) normalizeTodoLists(editor);
+    persistEditor();
+  });
+  editor.addEventListener("keydown", (event) => {
+    if (handleTodoEnterKey(editor, event)) {
+      normalizeTodoLists(editor);
+      persistEditor();
+      syncFormatToolbar();
+    }
+  });
   editor.addEventListener("keyup", syncFormatToolbar);
   editor.addEventListener("mouseup", syncFormatToolbar);
+  editor.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement) || target.type !== "checkbox") {
+      return;
+    }
+    if (!editor.contains(target)) return;
+    const item = target.closest("li.todo-item");
+    item?.classList.toggle("is-checked", target.checked);
+    persistEditor();
+  });
   editor.addEventListener("paste", (event) => {
     event.preventDefault();
     const html = event.clipboardData?.getData("text/html");
@@ -753,6 +814,7 @@ async function main() {
     } else {
       document.execCommand("insertText", false, text);
     }
+    normalizeTodoLists(editor);
     persistEditor();
   });
   document.addEventListener("selectionchange", () => {
