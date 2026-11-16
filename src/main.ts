@@ -4,16 +4,18 @@ import {
   applyFontSize,
   applyForeColor,
   contentToHtml,
-  handleTodoEnterKey,
+  handleTodoKeydown,
   isEditorEmpty,
   normalizeFontSizeTree,
   normalizeTodoLists,
   readFormatState,
+  repairTodoCaret,
   saveEditorRange,
   sanitizeHtml,
   toggleBulletList,
   toggleFormat,
   toggleOrderedList,
+  toggleTodoChecked,
   toggleTodoList,
 } from "./format";
 import {
@@ -787,23 +789,27 @@ async function main() {
     persistEditor();
   });
   editor.addEventListener("keydown", (event) => {
-    if (handleTodoEnterKey(editor, event)) {
+    if (handleTodoKeydown(editor, event)) {
       normalizeTodoLists(editor);
       persistEditor();
       syncFormatToolbar();
     }
   });
-  editor.addEventListener("keyup", syncFormatToolbar);
-  editor.addEventListener("mouseup", syncFormatToolbar);
+  editor.addEventListener("keyup", () => {
+    repairTodoCaret(editor);
+    syncFormatToolbar();
+  });
+  editor.addEventListener("mouseup", () => {
+    repairTodoCaret(editor);
+    syncFormatToolbar();
+  });
   editor.addEventListener("click", (event) => {
     const target = event.target;
-    if (!(target instanceof HTMLInputElement) || target.type !== "checkbox") {
-      return;
+    if (!(target instanceof HTMLElement) || !editor.contains(target)) return;
+    if (toggleTodoChecked(target)) {
+      event.preventDefault();
+      persistEditor();
     }
-    if (!editor.contains(target)) return;
-    const item = target.closest("li.todo-item");
-    item?.classList.toggle("is-checked", target.checked);
-    persistEditor();
   });
   editor.addEventListener("paste", (event) => {
     event.preventDefault();
@@ -819,6 +825,7 @@ async function main() {
   });
   document.addEventListener("selectionchange", () => {
     if (document.activeElement !== editor) return;
+    repairTodoCaret(editor);
     syncFormatToolbar();
   });
   syncFormatToolbar();
