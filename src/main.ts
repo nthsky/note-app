@@ -5,6 +5,7 @@ import {
   applyForeColor,
   cleanupEditorStructure,
   contentToHtml,
+  handleMarkdownListShortcut,
   handleTodoKeydown,
   isEditorEmpty,
   normalizeFontSizeTree,
@@ -801,6 +802,12 @@ async function main() {
     persistEditor();
   });
   editor.addEventListener("keydown", (event) => {
+    if (handleMarkdownListShortcut(editor, event)) {
+      normalizeTodoLists(editor);
+      persistEditor();
+      syncFormatToolbar();
+      return;
+    }
     if (handleTodoKeydown(editor, event)) {
       normalizeTodoLists(editor);
       cleanupEditorStructure(editor);

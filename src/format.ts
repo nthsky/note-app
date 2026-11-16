@@ -604,6 +604,110 @@ function closestListItem(node: Node | null, editor: HTMLElement) {
   return null;
 }
 
+function closestBlock(node: Node | null, editor: HTMLElement) {
+  let current =
+    node?.nodeType === Node.ELEMENT_NODE
+      ? (node as HTMLElement)
+      : node?.parentElement ?? null;
+  while (current && current !== editor) {
+    if (["DIV", "P", "LI", "H1", "H2", "H3", "H4", "H5", "H6"].includes(current.tagName)) {
+      return current;
+    }
+    current = current.parentElement;
+  }
+  return null;
+}
+
+function prefixBeforeCaret(block: HTMLElement, range: Range) {
+  const prefix = document.createRange();
+  prefix.selectNodeContents(block);
+  prefix.setEnd(range.startContainer, range.startOffset);
+  return prefix.toString().replace(/\u200B/g, "");
+}
+
+/**
+ * Markdown-like shortcuts at the start of a line:
+ * `- ` → bullet list, `1. ` → ordered list, `[ ] ` → todo list.
+ */
+export function handleMarkdownListShortcut(
+  editor: HTMLElement,
+  event: KeyboardEvent,
+): boolean {
+  if (event.key !== " " || event.isComposing) return false;
+  if (event.metaKey || event.ctrlKey || event.altKey) return false;
+
+  const marker = selectionInEditor(editor);
+  if (!marker || !marker.range.collapsed) return false;
+
+  // Only trigger outside existing lists (keep typing normal inside items).
+  if (closestList(marker.range.startContainer, editor)) return false;
+
+  const block = closestBlock(marker.range.startContainer, editor);
+  if (!block || block === editor) return false;
+
+  const prefix = prefixBeforeCaret(block, marker.range).trimEnd();
+  let kind: "bullet" | "ordered" | "todo" | null = null;
+  let checked = false;
+
+  if (prefix === "-" || prefix === "*") {
+    kind = "bullet";
+  } else if (/^\d+\.$/.test(prefix)) {
+    kind = "ordered";
+  } else if (prefix === "[]" || prefix === "[ ]") {
+    kind = "todo";
+  } else if (prefix === "[x]" || prefix === "[X]" || prefix === "[x ]" || prefix === "[X ]") {
+    kind = "todo";
+    checked = true;
+  }
+
+  if (!kind) return false;
+
+  event.preventDefault();
+
+  const wipe = document.createRange();
+  wipe.selectNodeContents(block);
+  wipe.setEnd(marker.range.startContainer, marker.range.startOffset);
+  wipe.deleteContents();
+
+  if (!block.childNodes.length) {
+    block.append(document.createElement("br"));
+  }
+
+  const selection = window.getSelection();
+  const caret = document.createRange();
+  caret.selectNodeContents(block);
+  caret.collapse(true);
+  selection?.removeAllRanges();
+  selection?.addRange(caret);
+
+  if (kind === "ordered") {
+    document.execCommand("insertOrderedList", false);
+  } else {
+    document.execCommand("insertUnorderedList", false);
+  }
+
+  const list = closestList(window.getSelection()?.anchorNode ?? null, editor);
+  if (kind === "todo" && list) {
+    convertListToTodo(list);
+    if (checked) {
+      const li = closestListItem(window.getSelection()?.anchorNode ?? null, editor);
+      if (li) {
+        const check = li.querySelector(".todo-check");
+        check?.setAttribute("aria-checked", "true");
+        li.classList.add("is-checked");
+      }
+    }
+  } else if (list) {
+    list.classList.remove("todo-list");
+    for (const li of Array.from(list.querySelectorAll("li.todo-item"))) {
+      stripTodoChrome(li as HTMLLIElement);
+    }
+  }
+
+  cleanupEditorStructure(editor);
+  return true;
+}
+
 function isTodoTextEmpty(text: HTMLElement | null) {
   return !(text?.textContent ?? "").replace(/\u200B/g, "").trim();
 }
