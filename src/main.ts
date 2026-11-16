@@ -772,8 +772,13 @@ async function main() {
       button.setAttribute("aria-label", color.label);
       button.textContent = "A";
       button.style.color = color.value;
-      button.addEventListener("mousedown", keepSelection);
-      button.addEventListener("click", () => applyToolbarColor(color.value));
+      // Apply on mousedown so the editor selection is kept and the click
+      // is not lost under the contenteditable stacking layer.
+      button.addEventListener("mousedown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        applyToolbarColor(color.value);
+      });
       return button;
     }),
   );
@@ -845,8 +850,9 @@ async function main() {
     const open = fmtColorPanel.hasAttribute("hidden");
     setColorPanelOpen(open);
   });
-  fmtColorReset.addEventListener("mousedown", keepSelection);
-  fmtColorReset.addEventListener("click", () => {
+  fmtColorReset.addEventListener("mousedown", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
     applyToolbarColor(DEFAULT_TEXT_COLOR);
   });
   fmtColorPanel.addEventListener("pointerdown", (event) => {
