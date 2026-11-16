@@ -486,7 +486,7 @@ function prefixBeforeCaret(block: HTMLElement, range: Range) {
 
 /**
  * Markdown-like shortcuts at the start of a line:
- * `- ` → bullet list, `1. ` → ordered list, `[ ] ` → todo list.
+ * `# `…`#### ` → headings, `- ` → bullet, `1. ` → ordered, `[ ] ` → todo.
  */
 export function handleMarkdownListShortcut(
   editor: HTMLElement,
@@ -505,6 +505,25 @@ export function handleMarkdownListShortcut(
   if (!block || block === editor) return false;
 
   const prefix = prefixBeforeCaret(block, marker.range).trimEnd();
+
+  const headingMatch = prefix.match(/^(#{1,4})$/);
+  if (headingMatch) {
+    event.preventDefault();
+
+    const wipe = document.createRange();
+    wipe.selectNodeContents(block);
+    wipe.setEnd(marker.range.startContainer, marker.range.startOffset);
+    wipe.deleteContents();
+
+    const rest = (block.textContent ?? "").replace(/\u200B/g, "");
+    const heading = document.createElement(`h${headingMatch[1].length}`);
+    if (rest) heading.append(document.createTextNode(rest));
+    else heading.append(document.createElement("br"));
+    block.replaceWith(heading);
+    placeCaretInBlock(heading);
+    return true;
+  }
+
   let kind: "bullet" | "ordered" | "todo" | null = null;
   let checked = false;
 
