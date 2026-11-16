@@ -150,8 +150,26 @@ export function createBlankNote(store: NoteStore): { id: string; store: NoteStor
   return { id, store: next };
 }
 
+export function stripHtml(content: string) {
+  if (!content) return "";
+  if (!/<\/?[a-z][\s\S]*>/i.test(content)) {
+    return content.replace(/\s+/g, " ").trim();
+  }
+  return content
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<\/(div|p|li|h[1-6])>/gi, " ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function previewText(content: string, max = 48) {
-  const text = content.replace(/\s+/g, " ").trim();
+  const text = stripHtml(content);
   if (!text) return "空便签";
   return text.length > max ? `${text.slice(0, max)}…` : text;
 }

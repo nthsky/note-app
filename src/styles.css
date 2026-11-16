@@ -334,7 +334,9 @@ body {
 }
 
 .note.settings-open .editor,
-.editor[hidden] {
+.note.settings-open .format-toolbar,
+.editor[hidden],
+.format-toolbar[hidden] {
   display: none;
 }
 
@@ -343,6 +345,116 @@ body {
   margin-bottom: 12px;
   align-content: start;
   overflow: auto;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.format-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 12px 6px;
+  padding: 4px 6px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.34);
+  border: 1px solid rgba(42, 36, 24, 0.08);
+  backdrop-filter: blur(8px);
+}
+
+.fmt-size-wrap,
+.fmt-color-wrap {
+  display: inline-flex;
+  align-items: center;
+}
+
+.fmt-size {
+  height: 26px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 7px;
+  background: rgba(42, 36, 24, 0.06);
+  color: var(--ink);
+  font: 600 12px/1 inherit;
+  cursor: pointer;
+}
+
+.fmt-size:hover,
+.fmt-size:focus {
+  background: rgba(42, 36, 24, 0.1);
+  outline: none;
+}
+
+.fmt-color {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid rgba(42, 36, 24, 0.12);
+  border-radius: 7px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.fmt-color::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+
+.fmt-color::-webkit-color-swatch {
+  border: 0;
+  border-radius: 4px;
+}
+
+.fmt-divider {
+  width: 1px;
+  height: 16px;
+  margin: 0 2px;
+  background: rgba(42, 36, 24, 0.12);
+}
+
+.fmt-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 26px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: 700 13px/1 "SF Pro Text", "Helvetica Neue", sans-serif;
+  cursor: pointer;
+}
+
+.fmt-btn em {
+  font-style: italic;
+  font-weight: 600;
+}
+
+.fmt-btn .fmt-u {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.fmt-btn .fmt-s {
+  text-decoration: line-through;
+}
+
+.fmt-btn:hover {
+  background: rgba(42, 36, 24, 0.08);
+  color: var(--ink);
+}
+
+.fmt-btn[aria-pressed="true"] {
+  background: rgba(31, 111, 91, 0.14);
+  color: var(--accent);
 }
 
 @keyframes rise {
@@ -431,20 +543,28 @@ body {
   width: 100%;
   min-height: 0;
   margin: 0;
-  padding: 8px 16px 18px;
+  padding: 4px 16px 18px;
   border: 0;
-  resize: none;
   outline: none;
+  overflow: auto;
   background: transparent;
   color: var(--ink);
   font: 400 16px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text",
     "PingFang SC", "Hiragino Sans GB", "Helvetica Neue", sans-serif;
   user-select: text;
   caret-color: var(--accent);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
-.editor::placeholder {
+.editor.is-empty::before {
+  content: attr(data-placeholder);
   color: var(--ink-faint);
+  pointer-events: none;
+}
+
+.editor:focus {
+  outline: none;
 }
 
 .resize-hint {

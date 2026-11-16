@@ -182,13 +182,83 @@
         </label>
       </section>
 
-      <textarea
+      <div id="format-toolbar" class="format-toolbar" role="toolbar" aria-label="文字格式">
+        <label class="fmt-size-wrap" title="字号">
+          <span class="sr-only">字号</span>
+          <select id="fmt-size" class="fmt-size" aria-label="字号">
+            <option value="12">12</option>
+            <option value="14">14</option>
+            <option value="16" selected>16</option>
+            <option value="18">18</option>
+            <option value="20">20</option>
+            <option value="24">24</option>
+            <option value="28">28</option>
+            <option value="32">32</option>
+          </select>
+        </label>
+        <label class="fmt-color-wrap" title="字体颜色">
+          <span class="sr-only">字体颜色</span>
+          <input
+            id="fmt-color"
+            class="fmt-color"
+            type="color"
+            value="#2a2418"
+            aria-label="字体颜色"
+          />
+        </label>
+        <span class="fmt-divider" aria-hidden="true"></span>
+        <button
+          type="button"
+          id="fmt-bold"
+          class="fmt-btn"
+          title="加粗"
+          aria-label="加粗"
+          aria-pressed="false"
+        >
+          <strong>B</strong>
+        </button>
+        <button
+          type="button"
+          id="fmt-italic"
+          class="fmt-btn"
+          title="斜体"
+          aria-label="斜体"
+          aria-pressed="false"
+        >
+          <em>I</em>
+        </button>
+        <button
+          type="button"
+          id="fmt-underline"
+          class="fmt-btn"
+          title="下划线"
+          aria-label="下划线"
+          aria-pressed="false"
+        >
+          <span class="fmt-u">U</span>
+        </button>
+        <button
+          type="button"
+          id="fmt-strike"
+          class="fmt-btn"
+          title="删除线"
+          aria-label="删除线"
+          aria-pressed="false"
+        >
+          <span class="fmt-s">S</span>
+        </button>
+      </div>
+
+      <div
         id="editor"
-        class="editor"
+        class="editor is-empty"
+        contenteditable="true"
+        role="textbox"
+        aria-multiline="true"
         spellcheck="true"
-        placeholder="写点什么…"
+        data-placeholder="写点什么…"
         aria-label="便签内容"
-      ></textarea>
+      ></div>
 
       <div class="resize-hint" aria-hidden="true"></div>
     </div>

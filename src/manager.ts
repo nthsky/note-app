@@ -8,6 +8,7 @@ import {
   listNotes,
   loadStore,
   previewText,
+  stripHtml,
   saveStore,
 } from "./store";
 import { closeNoteWindow, openNoteWindow } from "./windows";
@@ -59,7 +60,8 @@ async function main() {
     const query = searchInput.value.trim().toLowerCase();
     const rows = listNotes(store).filter(({ note }) => {
       if (!query) return true;
-      const haystack = `${note.emoji} ${note.title} ${note.content}`.toLowerCase();
+      const haystack =
+        `${note.emoji} ${note.title} ${stripHtml(note.content)}`.toLowerCase();
       return haystack.includes(query);
     });
 
@@ -227,7 +229,8 @@ async function main() {
     const query = searchInput.value.trim().toLowerCase();
     const rows = listNotes(store).filter(({ note }) => {
       if (!query) return true;
-      const haystack = `${note.emoji} ${note.title} ${note.content}`.toLowerCase();
+      const haystack =
+        `${note.emoji} ${note.title} ${stripHtml(note.content)}`.toLowerCase();
       return haystack.includes(query);
     });
 

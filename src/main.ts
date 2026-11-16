@@ -1,6 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
+  applyFontSize,
+  applyForeColor,
+  contentToHtml,
+  isEditorEmpty,
+  readFormatState,
+  sanitizeHtml,
+  toggleFormat,
+} from "./format";
+import {
   createBlankNote,
   defaults,
   displayTitle,
@@ -364,7 +373,15 @@ async function main() {
   const emojiPicker = document.querySelector<HTMLElement>("#emoji-picker");
   const btnEditTitle =
     document.querySelector<HTMLButtonElement>("#btn-edit-title");
-  const editor = document.querySelector<HTMLTextAreaElement>("#editor");
+  const formatToolbar = document.querySelector<HTMLElement>("#format-toolbar");
+  const editor = document.querySelector<HTMLElement>("#editor");
+  const fmtSize = document.querySelector<HTMLSelectElement>("#fmt-size");
+  const fmtColor = document.querySelector<HTMLInputElement>("#fmt-color");
+  const fmtBold = document.querySelector<HTMLButtonElement>("#fmt-bold");
+  const fmtItalic = document.querySelector<HTMLButtonElement>("#fmt-italic");
+  const fmtUnderline =
+    document.querySelector<HTMLButtonElement>("#fmt-underline");
+  const fmtStrike = document.querySelector<HTMLButtonElement>("#fmt-strike");
   const settings = document.querySelector<HTMLElement>("#settings");
   const opacityInput = document.querySelector<HTMLInputElement>("#opacity");
   const opacityValue = document.querySelector<HTMLOutputElement>("#opacity-value");
@@ -388,7 +405,14 @@ async function main() {
     !btnEmoji ||
     !emojiPicker ||
     !btnEditTitle ||
+    !formatToolbar ||
     !editor ||
+    !fmtSize ||
+    !fmtColor ||
+    !fmtBold ||
+    !fmtItalic ||
+    !fmtUnderline ||
+    !fmtStrike ||
     !settings ||
     !opacityInput ||
     !opacityValue ||
@@ -536,7 +560,8 @@ async function main() {
 
   titleInput.value = state.title;
   btnEmoji.textContent = state.emoji;
-  editor.value = state.content;
+  editor.innerHTML = contentToHtml(state.content);
+  editor.classList.toggle("is-empty", isEditorEmpty(editor));
   opacityInput.value = String(state.opacity);
   opacityValue.value = `${state.opacity}%`;
   bgColorInput.value = state.bgColor;
@@ -628,11 +653,96 @@ async function main() {
     }
   });
 
-  editor.addEventListener("input", () => {
-    state.content = editor.value;
+  const syncEmptyState = () => {
+    editor.classList.toggle("is-empty", isEditorEmpty(editor));
+  };
+
+  const persistEditor = () => {
+    state.content = sanitizeHtml(editor.innerHTML);
+    syncEmptyState();
     window.clearTimeout(saveTimer);
     saveTimer = window.setTimeout(persist, 200);
+  };
+
+  const syncFormatToolbar = () => {
+    if (app.classList.contains("settings-open")) return;
+    const format = readFormatState(editor);
+    fmtBold.setAttribute("aria-pressed", String(format.bold));
+    fmtItalic.setAttribute("aria-pressed", String(format.italic));
+    fmtUnderline.setAttribute("aria-pressed", String(format.underline));
+    fmtStrike.setAttribute("aria-pressed", String(format.strike));
+    if (document.activeElement !== fmtColor) {
+      fmtColor.value = format.color;
+    }
+    if (document.activeElement !== fmtSize) {
+      fmtSize.value = format.fontSize;
+    }
+  };
+
+  const keepSelection = (event: Event) => {
+    event.preventDefault();
+  };
+
+  for (const control of [
+    fmtBold,
+    fmtItalic,
+    fmtUnderline,
+    fmtStrike,
+    fmtSize,
+  ]) {
+    control.addEventListener("mousedown", keepSelection);
+  }
+
+  fmtBold.addEventListener("click", () => {
+    toggleFormat(editor, "bold");
+    persistEditor();
+    syncFormatToolbar();
   });
+  fmtItalic.addEventListener("click", () => {
+    toggleFormat(editor, "italic");
+    persistEditor();
+    syncFormatToolbar();
+  });
+  fmtUnderline.addEventListener("click", () => {
+    toggleFormat(editor, "underline");
+    persistEditor();
+    syncFormatToolbar();
+  });
+  fmtStrike.addEventListener("click", () => {
+    toggleFormat(editor, "strikeThrough");
+    persistEditor();
+    syncFormatToolbar();
+  });
+  fmtSize.addEventListener("change", () => {
+    applyFontSize(editor, fmtSize.value);
+    persistEditor();
+    syncFormatToolbar();
+  });
+  fmtColor.addEventListener("input", () => {
+    applyForeColor(editor, fmtColor.value);
+    persistEditor();
+    syncFormatToolbar();
+  });
+
+  editor.addEventListener("input", persistEditor);
+  editor.addEventListener("keyup", syncFormatToolbar);
+  editor.addEventListener("mouseup", syncFormatToolbar);
+  editor.addEventListener("paste", (event) => {
+    event.preventDefault();
+    const html = event.clipboardData?.getData("text/html");
+    const text = event.clipboardData?.getData("text/plain") ?? "";
+    if (html) {
+      document.execCommand("insertHTML", false, sanitizeHtml(html));
+    } else {
+      document.execCommand("insertText", false, text);
+    }
+    persistEditor();
+  });
+  document.addEventListener("selectionchange", () => {
+    if (document.activeElement !== editor) return;
+    syncFormatToolbar();
+  });
+  syncFormatToolbar();
 
   opacityInput.addEventListener("input", () => {
     state.opacity = Number(opacityInput.value);
@@ -682,10 +792,12 @@ async function main() {
     if (open) {
       settings.removeAttribute("hidden");
       editor.setAttribute("hidden", "");
+      formatToolbar.setAttribute("hidden", "");
       app.classList.add("settings-open");
     } else {
       settings.setAttribute("hidden", "");
       editor.removeAttribute("hidden");
+      formatToolbar.removeAttribute("hidden");
       app.classList.remove("settings-open");
     }
     btnSettings.setAttribute("aria-pressed", String(open));
