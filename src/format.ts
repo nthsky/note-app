@@ -197,21 +197,6 @@ export function resetEmptyEditor(editor: HTMLElement) {
   }
 }
 
-/**
- * Enter in an already-blank note should not keep stacking empty blocks.
- * Returns true when the event was handled.
- */
-export function handleEmptyEditorEnter(
-  editor: HTMLElement,
-  event: KeyboardEvent,
-): boolean {
-  if (event.key !== "Enter" || event.shiftKey || event.isComposing) return false;
-  if (!isEditorEmpty(editor)) return false;
-  event.preventDefault();
-  resetEmptyEditor(editor);
-  return true;
-}
-
 function selectionInEditor(editor: HTMLElement) {
   const selection = window.getSelection();
   if (!selection || selection.rangeCount === 0) return null;
