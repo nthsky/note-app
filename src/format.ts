@@ -143,6 +143,82 @@ function restoreRange(editor: HTMLElement, range: Range) {
   return selection;
 }
 
+function isZwspOnly(node: Node) {
+  return (node.textContent ?? "").replace(/\u200B/g, "").trim() === "";
+}
+
+function clearInlineFontSize(root: Node) {
+  const elements: HTMLElement[] = [];
+  const walk = (node: Node) => {
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      elements.push(node as HTMLElement);
+      for (const child of Array.from(node.childNodes)) walk(child);
+    }
+  };
+  walk(root);
+
+  for (const el of elements) {
+    if (el.style?.fontSize) el.style.removeProperty("font-size");
+    if (el.tagName === "FONT") el.removeAttribute("size");
+    if (el.getAttribute("style") === "") el.removeAttribute("style");
+  }
+
+  // Unwrap spans/fonts that only existed to carry font-size.
+  for (const el of elements.slice().reverse()) {
+    if (!el.isConnected) continue;
+    const styleEmpty = !el.getAttribute("style");
+    const isFont = el.tagName === "FONT" && !el.hasAttribute("color");
+    const isBareSpan =
+      el.tagName === "SPAN" && styleEmpty && el.attributes.length === 0;
+    if (isFont || isBareSpan) {
+      el.replaceWith(...Array.from(el.childNodes));
+    }
+  }
+}
+
+function cleanupOrphanSizeMarkers(editor: HTMLElement, keep?: HTMLElement | null) {
+  for (const span of Array.from(editor.querySelectorAll("span[data-caret-size]"))) {
+    if (keep && span === keep) continue;
+    if (isZwspOnly(span)) span.remove();
+    else {
+      span.removeAttribute("data-caret-size");
+      // If text remains, leave font-size as-is.
+    }
+  }
+
+  // Drop empty sized spans that only leave a tall strut behind.
+  for (const span of Array.from(editor.querySelectorAll("span"))) {
+    if (keep && span === keep) continue;
+    if (!span.style.fontSize) continue;
+    if (!isZwspOnly(span)) continue;
+    if ((span.textContent ?? "") === "") {
+      span.remove();
+      continue;
+    }
+    // Pure zwsp leftovers from previous caret sizing.
+    if (!span.hasAttribute("data-caret-size")) span.remove();
+  }
+}
+
+function unwrapRedundantSizeAncestors(span: HTMLElement, editor: HTMLElement) {
+  let parent = span.parentElement;
+  while (parent && parent !== editor) {
+    const nextParent = parent.parentElement;
+    if (
+      parent.tagName === "SPAN" &&
+      parent.style.fontSize &&
+      parent.childNodes.length === 1 &&
+      parent.firstChild === span
+    ) {
+      parent.style.removeProperty("font-size");
+      if (!parent.getAttribute("style") && parent.attributes.length === 0) {
+        parent.replaceWith(span);
+      }
+    }
+    parent = nextParent;
+  }
+}
+
 export function applyFontSize(
   editor: HTMLElement,
   sizePx: string,
@@ -161,24 +237,33 @@ export function applyFontSize(
   const sized = `${sizePx}px`;
 
   if (range.collapsed) {
+    cleanupOrphanSizeMarkers(editor);
     const span = document.createElement("span");
     span.style.fontSize = sized;
+    span.dataset.caretSize = "1";
     span.append(document.createTextNode("\u200B"));
     range.insertNode(span);
+    unwrapRedundantSizeAncestors(span, editor);
     const next = document.createRange();
     next.setStart(span.firstChild as Text, 1);
     next.collapse(true);
     selection.removeAllRanges();
     selection.addRange(next);
+    cleanupOrphanSizeMarkers(editor, span);
     return;
   }
 
-  // Prefer wrapping the live selection; fall back to the legacy fontSize command.
+  // Prefer wrapping after stripping old sizes so outer large spans
+  // cannot keep the line box tall when sizing back down.
   try {
+    const content = range.extractContents();
+    clearInlineFontSize(content);
     const span = document.createElement("span");
     span.style.fontSize = sized;
-    span.append(range.extractContents());
+    span.append(content);
     range.insertNode(span);
+    unwrapRedundantSizeAncestors(span, editor);
+    cleanupOrphanSizeMarkers(editor);
     const next = document.createRange();
     next.selectNodeContents(span);
     selection.removeAllRanges();
@@ -197,10 +282,12 @@ export function applyFontSize(
 
   const fonts = Array.from(editor.querySelectorAll("font[size='7']"));
   for (const font of fonts) {
+    clearInlineFontSize(font);
     const span = document.createElement("span");
     span.style.fontSize = sized;
     while (font.firstChild) span.append(font.firstChild);
     font.replaceWith(span);
+    unwrapRedundantSizeAncestors(span, editor);
   }
 
   const spans = Array.from(editor.querySelectorAll("span")).filter((el) => {
@@ -210,6 +297,7 @@ export function applyFontSize(
   for (const span of spans) {
     span.style.fontSize = sized;
   }
+  cleanupOrphanSizeMarkers(editor);
 }
 
 export function saveEditorRange(editor: HTMLElement): Range | null {

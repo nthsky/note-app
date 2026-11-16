@@ -557,6 +557,12 @@ body {
   word-break: break-word;
 }
 
+.editor span,
+.editor font {
+  /* Keep unitless line-height so shrinking font-size also shrinks the strut. */
+  line-height: 1.55;
+}
+
 .editor.is-empty::before {
   content: attr(data-placeholder);
   color: var(--ink-faint);
