@@ -669,13 +669,19 @@ export function handleMarkdownListShortcut(
   wipe.setEnd(marker.range.startContainer, marker.range.startOffset);
   wipe.deleteContents();
 
-  if (!block.childNodes.length) {
-    block.append(document.createElement("br"));
-  }
+  // Keep any text that was typed after the markdown marker.
+  const rest = (block.textContent ?? "").replace(/\u200B/g, "");
+  block.replaceChildren();
+  if (rest) block.append(document.createTextNode(rest));
+  else block.append(document.createElement("br"));
 
   const selection = window.getSelection();
   const caret = document.createRange();
-  caret.selectNodeContents(block);
+  if (rest && block.firstChild) {
+    caret.setStart(block.firstChild, 0);
+  } else {
+    caret.setStart(block, 0);
+  }
   caret.collapse(true);
   selection?.removeAllRanges();
   selection?.addRange(caret);
@@ -686,26 +692,74 @@ export function handleMarkdownListShortcut(
     document.execCommand("insertUnorderedList", false);
   }
 
-  const list = closestList(window.getSelection()?.anchorNode ?? null, editor);
+  let list = closestList(window.getSelection()?.anchorNode ?? null, editor);
+  if (!list) {
+    // Fallback: newly created list is often the last list in the editor.
+    const lists = editor.querySelectorAll("ul, ol");
+    list = (lists[lists.length - 1] as HTMLUListElement | HTMLOListElement | undefined) ?? null;
+  }
+
+  let li: HTMLLIElement | null = null;
   if (kind === "todo" && list) {
     convertListToTodo(list);
-    if (checked) {
-      const li = closestListItem(window.getSelection()?.anchorNode ?? null, editor);
-      if (li) {
-        const check = li.querySelector(".todo-check");
-        check?.setAttribute("aria-checked", "true");
-        li.classList.add("is-checked");
-      }
+    li =
+      closestListItem(window.getSelection()?.anchorNode ?? null, editor) ??
+      (list.querySelector("li") as HTMLLIElement | null);
+    if (checked && li) {
+      const check = li.querySelector(".todo-check");
+      check?.setAttribute("aria-checked", "true");
+      li.classList.add("is-checked");
     }
   } else if (list) {
     list.classList.remove("todo-list");
-    for (const li of Array.from(list.querySelectorAll("li.todo-item"))) {
-      stripTodoChrome(li as HTMLLIElement);
+    for (const item of Array.from(list.querySelectorAll("li.todo-item"))) {
+      stripTodoChrome(item as HTMLLIElement);
     }
+    li =
+      closestListItem(window.getSelection()?.anchorNode ?? null, editor) ??
+      (list.querySelector("li") as HTMLLIElement | null);
   }
 
-  cleanupEditorStructure(editor);
+  // Only strip empty siblings around the new list — avoid resetEmptyEditor.
+  if (list) {
+    const prev = list.previousSibling;
+    const next = list.nextSibling;
+    if (prev && isBlankBlock(prev)) prev.parentNode?.removeChild(prev);
+    if (next && isBlankBlock(next)) next.parentNode?.removeChild(next);
+  }
+
+  if (li && editor.contains(li)) {
+    focusListItemContent(li);
+  }
   return true;
+}
+
+function focusListItemContent(li: HTMLLIElement) {
+  if (li.classList.contains("todo-item") || li.querySelector(":scope > .todo-text")) {
+    ensureTodoItem(li);
+    focusTodoText(li);
+    return;
+  }
+
+  const selection = window.getSelection();
+  if (!selection) return;
+  const range = document.createRange();
+
+  // Prefer the first text node so typing continues in the item body.
+  const walker = document.createTreeWalker(li, NodeFilter.SHOW_TEXT);
+  const textNode = walker.nextNode();
+  if (textNode) {
+    range.setStart(textNode, 0);
+    range.collapse(true);
+  } else if (li.querySelector("br")) {
+    range.setStart(li, 0);
+    range.collapse(true);
+  } else {
+    range.selectNodeContents(li);
+    range.collapse(true);
+  }
+  selection.removeAllRanges();
+  selection.addRange(range);
 }
 
 function isTodoTextEmpty(text: HTMLElement | null) {
