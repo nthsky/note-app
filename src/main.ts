@@ -6,6 +6,7 @@ import {
   contentToHtml,
   isEditorEmpty,
   readFormatState,
+  saveEditorRange,
   sanitizeHtml,
   toggleFormat,
 } from "./format";
@@ -683,15 +684,21 @@ async function main() {
     event.preventDefault();
   };
 
-  for (const control of [
-    fmtBold,
-    fmtItalic,
-    fmtUnderline,
-    fmtStrike,
-    fmtSize,
-  ]) {
+  // Buttons need preventDefault so the editor selection isn't cleared.
+  // Native <select>/<input type=color> must NOT preventDefault or they won't open.
+  for (const control of [fmtBold, fmtItalic, fmtUnderline, fmtStrike]) {
     control.addEventListener("mousedown", keepSelection);
   }
+
+  let savedRange: Range | null = null;
+  const rememberSelection = () => {
+    savedRange = saveEditorRange(editor) ?? savedRange;
+  };
+
+  fmtSize.addEventListener("mousedown", rememberSelection);
+  fmtSize.addEventListener("focus", rememberSelection);
+  fmtColor.addEventListener("mousedown", rememberSelection);
+  fmtColor.addEventListener("focus", rememberSelection);
 
   fmtBold.addEventListener("click", () => {
     toggleFormat(editor, "bold");
@@ -714,12 +721,20 @@ async function main() {
     syncFormatToolbar();
   });
   fmtSize.addEventListener("change", () => {
-    applyFontSize(editor, fmtSize.value);
+    applyFontSize(editor, fmtSize.value, savedRange);
+    savedRange = saveEditorRange(editor);
     persistEditor();
     syncFormatToolbar();
   });
   fmtColor.addEventListener("input", () => {
+    if (savedRange) {
+      const selection = window.getSelection();
+      editor.focus();
+      selection?.removeAllRanges();
+      selection?.addRange(savedRange);
+    }
     applyForeColor(editor, fmtColor.value);
+    savedRange = saveEditorRange(editor);
     persistEditor();
     syncFormatToolbar();
   });

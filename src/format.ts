@@ -134,29 +134,87 @@ export function applyForeColor(editor: HTMLElement, color: string) {
   document.execCommand("foreColor", false, color);
 }
 
-export function applyFontSize(editor: HTMLElement, sizePx: string) {
+function restoreRange(editor: HTMLElement, range: Range) {
   focusEditor(editor);
-  ensureStyleWithCss();
+  const selection = window.getSelection();
+  if (!selection) return null;
+  selection.removeAllRanges();
+  selection.addRange(range);
+  return selection;
+}
+
+export function applyFontSize(
+  editor: HTMLElement,
+  sizePx: string,
+  savedRange?: Range | null,
+) {
+  if (savedRange) {
+    restoreRange(editor, savedRange);
+  } else {
+    focusEditor(editor);
+  }
+
   const marker = selectionInEditor(editor);
   if (!marker) return;
 
+  const { selection, range } = marker;
+  const sized = `${sizePx}px`;
+
+  if (range.collapsed) {
+    const span = document.createElement("span");
+    span.style.fontSize = sized;
+    span.append(document.createTextNode("\u200B"));
+    range.insertNode(span);
+    const next = document.createRange();
+    next.setStart(span.firstChild as Text, 1);
+    next.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(next);
+    return;
+  }
+
+  // Prefer wrapping the live selection; fall back to the legacy fontSize command.
+  try {
+    const span = document.createElement("span");
+    span.style.fontSize = sized;
+    span.append(range.extractContents());
+    range.insertNode(span);
+    const next = document.createRange();
+    next.selectNodeContents(span);
+    selection.removeAllRanges();
+    selection.addRange(next);
+    return;
+  } catch {
+    // Selection crossed element boundaries — use execCommand fallback.
+  }
+
+  try {
+    document.execCommand("styleWithCSS", false, "false");
+  } catch {
+    // ignore
+  }
   document.execCommand("fontSize", false, "7");
-  const fonts = Array.from(editor.querySelectorAll('font[size="7"]'));
+
+  const fonts = Array.from(editor.querySelectorAll("font[size='7']"));
   for (const font of fonts) {
     const span = document.createElement("span");
-    span.style.fontSize = `${sizePx}px`;
+    span.style.fontSize = sized;
     while (font.firstChild) span.append(font.firstChild);
     font.replaceWith(span);
   }
 
-  // Also normalize any leftover CSS font-size: xxx-large from styleWithCSS.
   const spans = Array.from(editor.querySelectorAll("span")).filter((el) => {
     const value = el.style.fontSize;
     return value === "xxx-large" || value === "-webkit-xxx-large";
   });
   for (const span of spans) {
-    span.style.fontSize = `${sizePx}px`;
+    span.style.fontSize = sized;
   }
+}
+
+export function saveEditorRange(editor: HTMLElement): Range | null {
+  const marker = selectionInEditor(editor);
+  return marker ? marker.range.cloneRange() : null;
 }
 
 function nearestStyle(
