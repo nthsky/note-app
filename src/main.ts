@@ -5,10 +5,12 @@ import {
   applyTextStyle,
   cleanupEditorStructure,
   contentToHtml,
+  DEFAULT_TEXT_COLOR,
   ensureEditableBlock,
   handleListKeydown,
   handleMarkdownListShortcut,
   isEditorEmpty,
+  nearestTextColor,
   normalizeFontSizeTree,
   normalizeTodoLists,
   readFormatState,
@@ -16,6 +18,7 @@ import {
   resetEmptyEditor,
   saveEditorRange,
   sanitizeHtml,
+  TEXT_COLORS,
   toggleBulletList,
   toggleFormat,
   toggleOrderedList,
@@ -392,7 +395,12 @@ async function main() {
     document.querySelector<HTMLElement>("#editor-placeholder");
   const editor = document.querySelector<HTMLElement>("#editor");
   const fmtSize = document.querySelector<HTMLSelectElement>("#fmt-size");
-  const fmtColor = document.querySelector<HTMLInputElement>("#fmt-color");
+  const fmtColor = document.querySelector<HTMLButtonElement>("#fmt-color");
+  const fmtColorPanel = document.querySelector<HTMLElement>("#fmt-color-panel");
+  const fmtColorSwatches =
+    document.querySelector<HTMLElement>("#fmt-color-swatches");
+  const fmtColorReset =
+    document.querySelector<HTMLButtonElement>("#fmt-color-reset");
   const fmtBold = document.querySelector<HTMLButtonElement>("#fmt-bold");
   const fmtItalic = document.querySelector<HTMLButtonElement>("#fmt-italic");
   const fmtUnderline =
@@ -430,6 +438,9 @@ async function main() {
     !editor ||
     !fmtSize ||
     !fmtColor ||
+    !fmtColorPanel ||
+    !fmtColorSwatches ||
+    !fmtColorReset ||
     !fmtBold ||
     !fmtItalic ||
     !fmtUnderline ||
@@ -705,8 +716,12 @@ async function main() {
     fmtBullet.setAttribute("aria-pressed", String(format.bullet));
     fmtOrdered.setAttribute("aria-pressed", String(format.ordered));
     fmtTodo.setAttribute("aria-pressed", String(format.todo));
-    if (document.activeElement !== fmtColor) {
-      fmtColor.value = format.color;
+    const matched = nearestTextColor(format.color);
+    fmtColor.style.setProperty("--fmt-color", matched.value);
+    for (const swatch of Array.from(
+      fmtColorSwatches.querySelectorAll<HTMLButtonElement>(".fmt-color-swatch"),
+    )) {
+      swatch.classList.toggle("is-active", swatch.dataset.color === matched.value);
     }
     if (document.activeElement !== fmtSize) {
       fmtSize.value = format.textStyle;
@@ -717,8 +732,54 @@ async function main() {
     event.preventDefault();
   };
 
+  let savedRange: Range | null = null;
+  const rememberSelection = () => {
+    savedRange = saveEditorRange(editor) ?? savedRange;
+  };
+
+  const setColorPanelOpen = (open: boolean) => {
+    if (open) {
+      rememberSelection();
+      fmtColorPanel.removeAttribute("hidden");
+    } else {
+      fmtColorPanel.setAttribute("hidden", "");
+    }
+    fmtColor.setAttribute("aria-expanded", String(open));
+  };
+
+  const applyToolbarColor = (color: string) => {
+    if (savedRange) {
+      const selection = window.getSelection();
+      editor.focus();
+      selection?.removeAllRanges();
+      selection?.addRange(savedRange);
+    }
+    applyForeColor(editor, color);
+    savedRange = saveEditorRange(editor);
+    fmtColor.style.setProperty("--fmt-color", color);
+    persistEditor();
+    syncFormatToolbar();
+    setColorPanelOpen(false);
+  };
+
+  fmtColorSwatches.replaceChildren(
+    ...TEXT_COLORS.map((color) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "fmt-color-swatch";
+      button.dataset.color = color.value;
+      button.title = color.label;
+      button.setAttribute("aria-label", color.label);
+      button.textContent = "A";
+      button.style.color = color.value;
+      button.addEventListener("mousedown", keepSelection);
+      button.addEventListener("click", () => applyToolbarColor(color.value));
+      return button;
+    }),
+  );
+
   // Buttons need preventDefault so the editor selection isn't cleared.
-  // Native <select>/<input type=color> must NOT preventDefault or they won't open.
+  // Native <select> must NOT preventDefault or it won't open.
   for (const control of [
     fmtBold,
     fmtItalic,
@@ -727,19 +788,14 @@ async function main() {
     fmtBullet,
     fmtOrdered,
     fmtTodo,
+    fmtColor,
   ]) {
     control.addEventListener("mousedown", keepSelection);
   }
 
-  let savedRange: Range | null = null;
-  const rememberSelection = () => {
-    savedRange = saveEditorRange(editor) ?? savedRange;
-  };
-
   fmtSize.addEventListener("mousedown", rememberSelection);
   fmtSize.addEventListener("focus", rememberSelection);
   fmtColor.addEventListener("mousedown", rememberSelection);
-  fmtColor.addEventListener("focus", rememberSelection);
 
   fmtBold.addEventListener("click", () => {
     toggleFormat(editor, "bold");
@@ -785,18 +841,30 @@ async function main() {
     persistEditor();
     syncFormatToolbar();
   });
-  fmtColor.addEventListener("input", () => {
-    if (savedRange) {
-      const selection = window.getSelection();
-      editor.focus();
-      selection?.removeAllRanges();
-      selection?.addRange(savedRange);
-    }
-    applyForeColor(editor, fmtColor.value);
-    savedRange = saveEditorRange(editor);
-    persistEditor();
-    syncFormatToolbar();
+  fmtColor.addEventListener("click", () => {
+    const open = fmtColorPanel.hasAttribute("hidden");
+    setColorPanelOpen(open);
   });
+  fmtColorReset.addEventListener("mousedown", keepSelection);
+  fmtColorReset.addEventListener("click", () => {
+    applyToolbarColor(DEFAULT_TEXT_COLOR);
+  });
+  fmtColorPanel.addEventListener("pointerdown", (event) => {
+    event.stopPropagation();
+  });
+  document.addEventListener("pointerdown", (event) => {
+    const target = event.target as Node | null;
+    if (
+      !fmtColorPanel.hasAttribute("hidden") &&
+      target &&
+      !fmtColorPanel.contains(target) &&
+      !fmtColor.contains(target)
+    ) {
+      setColorPanelOpen(false);
+    }
+  });
+
+  fmtColor.style.setProperty("--fmt-color", DEFAULT_TEXT_COLOR);
 
   editor.addEventListener("input", () => {
     ensureEditableBlock(editor);

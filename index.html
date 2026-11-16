@@ -193,16 +193,33 @@
             <option value="h4">标题 4</option>
           </select>
         </label>
-        <label class="fmt-color-wrap" title="字体颜色">
-          <span class="sr-only">字体颜色</span>
-          <input
+        <div class="fmt-color-wrap">
+          <button
+            type="button"
             id="fmt-color"
-            class="fmt-color"
-            type="color"
-            value="#2a2418"
+            class="fmt-color-btn"
+            title="字体颜色"
             aria-label="字体颜色"
-          />
-        </label>
+            aria-expanded="false"
+            aria-haspopup="dialog"
+          >
+            <span class="fmt-color-letter" aria-hidden="true">A</span>
+            <span class="fmt-color-bar" aria-hidden="true"></span>
+          </button>
+          <div
+            id="fmt-color-panel"
+            class="fmt-color-panel"
+            hidden
+            role="dialog"
+            aria-label="字体颜色"
+          >
+            <div class="fmt-color-label">字体颜色</div>
+            <div id="fmt-color-swatches" class="fmt-color-swatches"></div>
+            <button type="button" id="fmt-color-reset" class="fmt-color-reset">
+              恢复默认
+            </button>
+          </div>
+        </div>
         <span class="fmt-divider" aria-hidden="true"></span>
         <button
           type="button"

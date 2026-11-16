@@ -49,6 +49,54 @@ export const TEXT_STYLES = [
 
 export type TextStyleId = (typeof TEXT_STYLES)[number]["id"];
 
+/** Preset font colors inspired by common doc editors (ignore highlight/bg). */
+export const TEXT_COLORS = [
+  { id: "default", label: "默认", value: "#2a2418" },
+  { id: "gray", label: "灰色", value: "#8f959e" },
+  { id: "red", label: "红色", value: "#d83931" },
+  { id: "orange", label: "橙色", value: "#de7802" },
+  { id: "yellow", label: "黄色", value: "#dc9b04" },
+  { id: "green", label: "绿色", value: "#2ea121" },
+  { id: "blue", label: "蓝色", value: "#245bdb" },
+  { id: "purple", label: "紫色", value: "#6425d0" },
+] as const;
+
+export const DEFAULT_TEXT_COLOR = TEXT_COLORS[0].value;
+
+export type TextColorId = (typeof TEXT_COLORS)[number]["id"];
+
+export function nearestTextColor(hex: string) {
+  const normalized = hex.toLowerCase();
+  const exact = TEXT_COLORS.find((item) => item.value === normalized);
+  if (exact) return exact;
+
+  const toRgb = (value: string) => {
+    const raw = value.replace("#", "");
+    return [
+      Number.parseInt(raw.slice(0, 2), 16),
+      Number.parseInt(raw.slice(2, 4), 16),
+      Number.parseInt(raw.slice(4, 6), 16),
+    ] as const;
+  };
+
+  let best: (typeof TEXT_COLORS)[number] = TEXT_COLORS[0];
+  let bestDist = Number.POSITIVE_INFINITY;
+  try {
+    const [r, g, b] = toRgb(normalized);
+    for (const color of TEXT_COLORS) {
+      const [cr, cg, cb] = toRgb(color.value);
+      const dist = (r - cr) ** 2 + (g - cg) ** 2 + (b - cb) ** 2;
+      if (dist < bestDist) {
+        best = color;
+        bestDist = dist;
+      }
+    }
+  } catch {
+    return TEXT_COLORS[0];
+  }
+  return best;
+}
+
 export function looksLikeHtml(value: string) {
   return /<\/?[a-z][\s\S]*>/i.test(value);
 }
