@@ -1,8 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
-  applyFontSize,
   applyForeColor,
+  applyTextStyle,
   cleanupEditorStructure,
   contentToHtml,
   handleListKeydown,
@@ -708,7 +708,7 @@ async function main() {
       fmtColor.value = format.color;
     }
     if (document.activeElement !== fmtSize) {
-      fmtSize.value = format.fontSize;
+      fmtSize.value = format.textStyle;
     }
   };
 
@@ -779,7 +779,7 @@ async function main() {
     syncFormatToolbar();
   });
   fmtSize.addEventListener("change", () => {
-    applyFontSize(editor, fmtSize.value, savedRange);
+    applyTextStyle(editor, fmtSize.value, savedRange);
     savedRange = saveEditorRange(editor);
     persistEditor();
     syncFormatToolbar();

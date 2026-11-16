@@ -16,6 +16,10 @@ const ALLOWED_TAGS = new Set([
   "OL",
   "LI",
   "INPUT",
+  "H1",
+  "H2",
+  "H3",
+  "H4",
 ]);
 
 const ALLOWED_STYLES = new Set([
@@ -35,7 +39,15 @@ const ALLOWED_CLASSES = new Set([
   "is-checked",
 ]);
 
-export const FONT_SIZES = ["12", "14", "16", "18", "20", "24", "28", "32"];
+export const TEXT_STYLES = [
+  { id: "body", label: "正文", tag: "div" },
+  { id: "h1", label: "标题 1", tag: "h1" },
+  { id: "h2", label: "标题 2", tag: "h2" },
+  { id: "h3", label: "标题 3", tag: "h3" },
+  { id: "h4", label: "标题 4", tag: "h4" },
+] as const;
+
+export type TextStyleId = (typeof TEXT_STYLES)[number]["id"];
 
 export function looksLikeHtml(value: string) {
   return /<\/?[a-z][\s\S]*>/i.test(value);
@@ -271,62 +283,6 @@ function removeExplicitFontSize(el: HTMLElement) {
   if (el.classList.length === 0) el.removeAttribute("class");
 }
 
-function clearInlineFontSize(root: Node) {
-  const elements: HTMLElement[] = [];
-  const walk = (node: Node) => {
-    if (node.nodeType === Node.ELEMENT_NODE) {
-      elements.push(node as HTMLElement);
-      for (const child of Array.from(node.childNodes)) walk(child);
-    }
-  };
-  walk(root);
-
-  for (const el of elements) removeExplicitFontSize(el);
-
-  // Unwrap spans/fonts that only existed to carry font-size.
-  for (const el of elements.slice().reverse()) {
-    if (!el.isConnected) continue;
-    const styleEmpty = !el.getAttribute("style");
-    const classEmpty = !el.getAttribute("class");
-    const isFont = el.tagName === "FONT" && !el.hasAttribute("color");
-    const isBareSpan =
-      el.tagName === "SPAN" &&
-      styleEmpty &&
-      classEmpty &&
-      el.attributes.length === 0;
-    if (isFont || isBareSpan) {
-      el.replaceWith(...Array.from(el.childNodes));
-    }
-  }
-}
-
-function rangeCoversNodeContents(range: Range, el: HTMLElement) {
-  const full = document.createRange();
-  full.selectNodeContents(el);
-  return (
-    range.compareBoundaryPoints(Range.START_TO_START, full) <= 0 &&
-    range.compareBoundaryPoints(Range.END_TO_END, full) >= 0
-  );
-}
-
-/** If the selection fully covers a sized wrapper, take the whole wrapper so no empty large shell remains. */
-function liftRangeToSizedWrappers(range: Range, editor: HTMLElement) {
-  let best: HTMLElement | null = null;
-  let node: Node | null =
-    range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
-      ? range.commonAncestorContainer
-      : range.commonAncestorContainer.parentElement;
-
-  while (node && node !== editor) {
-    if (node instanceof HTMLElement && hasExplicitFontSize(node)) {
-      if (rangeCoversNodeContents(range, node)) best = node;
-    }
-    node = node.parentElement;
-  }
-
-  if (best) range.selectNode(best);
-}
-
 /** Outer sized wrappers leave a tall strut even when inner text is smaller — strip them. */
 export function normalizeFontSizeTree(editor: HTMLElement, keep?: HTMLElement | null) {
   let dirty = true;
@@ -378,22 +334,9 @@ export function normalizeFontSizeTree(editor: HTMLElement, keep?: HTMLElement | 
   }
 }
 
-function placeCaretIn(span: HTMLElement, selection: Selection) {
-  const next = document.createRange();
-  if (span.firstChild?.nodeType === Node.TEXT_NODE) {
-    const text = span.firstChild as Text;
-    next.setStart(text, Math.min(1, text.data.length));
-  } else {
-    next.selectNodeContents(span);
-  }
-  next.collapse(true);
-  selection.removeAllRanges();
-  selection.addRange(next);
-}
-
-export function applyFontSize(
+export function applyTextStyle(
   editor: HTMLElement,
-  sizePx: string,
+  styleId: string,
   savedRange?: Range | null,
 ) {
   if (savedRange) {
@@ -402,116 +345,29 @@ export function applyFontSize(
     focusEditor(editor);
   }
 
-  const marker = selectionInEditor(editor);
-  if (!marker) return;
+  if (!selectionInEditor(editor)) return;
 
-  const { selection, range } = marker;
-  const sized = `${sizePx}px`;
+  const style =
+    TEXT_STYLES.find((item) => item.id === styleId) ?? TEXT_STYLES[0];
+  const tag = style.tag;
 
-  if (range.collapsed) {
-    normalizeFontSizeTree(editor);
-    // If caret is already inside a sized span that only holds the caret marker / this run,
-    // reuse it instead of nesting.
-    const parent = range.startContainer.parentElement;
-    if (
-      parent &&
-      editor.contains(parent) &&
-      parent.tagName === "SPAN" &&
-      hasExplicitFontSize(parent) &&
-      isZwspOnly(parent)
-    ) {
-      parent.style.fontSize = sized;
-      parent.dataset.caretSize = "1";
-      placeCaretIn(parent, selection);
-      normalizeFontSizeTree(editor, parent);
-      return;
-    }
+  // WebKit prefers the bracketed form for formatBlock.
+  const applied =
+    document.execCommand("formatBlock", false, `<${tag}>`) ||
+    document.execCommand("formatBlock", false, tag);
 
-    const span = document.createElement("span");
-    span.style.fontSize = sized;
-    span.dataset.caretSize = "1";
-    span.append(document.createTextNode("\u200B"));
-    range.insertNode(span);
-    // Move out of any leftover empty sized ancestors and strip them.
-    let ancestor = span.parentElement;
-    while (ancestor && ancestor !== editor) {
-      const nextAncestor = ancestor.parentElement;
-      if (
-        (ancestor.tagName === "SPAN" || ancestor.tagName === "FONT") &&
-        hasExplicitFontSize(ancestor)
-      ) {
-        removeExplicitFontSize(ancestor);
-      }
-      ancestor = nextAncestor;
-    }
-    placeCaretIn(span, selection);
-    normalizeFontSizeTree(editor, span);
-    return;
+  if (!applied) {
+    // Fallback: wrap the current block manually.
+    const marker = selectionInEditor(editor);
+    const block = closestBlock(marker?.range.startContainer ?? null, editor);
+    if (!block || block === editor) return;
+    if (block.tagName.toLowerCase() === tag) return;
+    const next = document.createElement(tag);
+    while (block.firstChild) next.append(block.firstChild);
+    if (!next.childNodes.length) next.append(document.createElement("br"));
+    block.replaceWith(next);
+    placeCaretInBlock(next);
   }
-
-  liftRangeToSizedWrappers(range, editor);
-
-  try {
-    const content = range.extractContents();
-    clearInlineFontSize(content);
-
-    // extractContents often leaves an empty large-size shell behind — remove it.
-    const shell =
-      range.startContainer.nodeType === Node.ELEMENT_NODE
-        ? (range.startContainer as HTMLElement)
-        : range.startContainer.parentElement;
-    if (
-      shell &&
-      editor.contains(shell) &&
-      (shell.tagName === "SPAN" || shell.tagName === "FONT") &&
-      isZwspOnly(shell)
-    ) {
-      const parent = shell.parentElement;
-      if (parent) {
-        range.setStartBefore(shell);
-        range.collapse(true);
-      }
-      shell.remove();
-    }
-
-    const span = document.createElement("span");
-    span.style.fontSize = sized;
-    span.append(content);
-    range.insertNode(span);
-
-    let ancestor = span.parentElement;
-    while (ancestor && ancestor !== editor) {
-      const nextAncestor = ancestor.parentElement;
-      if (hasExplicitFontSize(ancestor)) removeExplicitFontSize(ancestor);
-      ancestor = nextAncestor;
-    }
-
-    normalizeFontSizeTree(editor);
-    const next = document.createRange();
-    next.selectNodeContents(span);
-    selection.removeAllRanges();
-    selection.addRange(next);
-    return;
-  } catch {
-    // Selection crossed element boundaries — use execCommand fallback.
-  }
-
-  try {
-    document.execCommand("styleWithCSS", false, "false");
-  } catch {
-    // ignore
-  }
-  document.execCommand("fontSize", false, "7");
-
-  const fonts = Array.from(editor.querySelectorAll("font[size='7']"));
-  for (const font of fonts) {
-    clearInlineFontSize(font);
-    const span = document.createElement("span");
-    span.style.fontSize = sized;
-    while (font.firstChild) span.append(font.firstChild);
-    font.replaceWith(span);
-  }
-  normalizeFontSizeTree(editor);
 }
 
 export function saveEditorRange(editor: HTMLElement): Range | null {
@@ -550,17 +406,20 @@ function rgbToHex(color: string) {
   return `#${toHex(match[1])}${toHex(match[2])}${toHex(match[3])}`;
 }
 
-function closestFontSize(px: number) {
-  let best = FONT_SIZES[2];
-  let bestDiff = Number.POSITIVE_INFINITY;
-  for (const size of FONT_SIZES) {
-    const diff = Math.abs(Number(size) - px);
-    if (diff < bestDiff) {
-      best = size;
-      bestDiff = diff;
-    }
+function readTextStyleId(node: Node | null, editor: HTMLElement): TextStyleId {
+  let current =
+    node?.nodeType === Node.ELEMENT_NODE
+      ? (node as HTMLElement)
+      : node?.parentElement ?? null;
+  while (current && current !== editor) {
+    const tag = current.tagName;
+    if (tag === "H1") return "h1";
+    if (tag === "H2") return "h2";
+    if (tag === "H3") return "h3";
+    if (tag === "H4") return "h4";
+    current = current.parentElement;
   }
-  return best;
+  return "body";
 }
 
 export type FormatState = {
@@ -569,7 +428,7 @@ export type FormatState = {
   underline: boolean;
   strike: boolean;
   color: string;
-  fontSize: string;
+  textStyle: TextStyleId;
   bullet: boolean;
   ordered: boolean;
   todo: boolean;
@@ -1161,7 +1020,7 @@ export function readFormatState(editor: HTMLElement): FormatState {
       document.queryCommandState("strikeThrough") ||
       /\bline-through\b/.test(deco),
     color: rgbToHex(style?.color ?? "#2a2418"),
-    fontSize: closestFontSize(Number.parseFloat(style?.fontSize ?? "16") || 16),
+    textStyle: readTextStyleId(marker?.range.startContainer ?? null, editor),
     bullet:
       !inTodo &&
       (document.queryCommandState("insertUnorderedList") ||
