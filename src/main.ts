@@ -5,8 +5,8 @@ import {
   applyForeColor,
   cleanupEditorStructure,
   contentToHtml,
+  handleListKeydown,
   handleMarkdownListShortcut,
-  handleTodoKeydown,
   isEditorEmpty,
   normalizeFontSizeTree,
   normalizeTodoLists,
@@ -808,9 +808,8 @@ async function main() {
       syncFormatToolbar();
       return;
     }
-    if (handleTodoKeydown(editor, event)) {
+    if (handleListKeydown(editor, event)) {
       normalizeTodoLists(editor);
-      cleanupEditorStructure(editor);
       persistEditor();
       syncFormatToolbar();
     }

@@ -1060,20 +1060,79 @@ export function toggleTodoList(editor: HTMLElement) {
   cleanupEditorStructure(editor);
 }
 
-function exitTodoItem(li: HTMLLIElement, list: HTMLElement, editor: HTMLElement) {
-  const block = document.createElement("div");
-  block.append(document.createElement("br"));
-  if (list.children.length === 1) {
-    list.replaceWith(block);
-  } else {
-    li.remove();
-    list.after(block);
+function isCaretAtListItemStart(
+  li: HTMLLIElement,
+  range: Range,
+  isTodo: boolean,
+) {
+  if (!range.collapsed) return false;
+
+  if (isTodo) {
+    const text = li.querySelector(".todo-text");
+    if (!text) return false;
+    if (
+      range.startContainer !== text &&
+      !text.contains(range.startContainer)
+    ) {
+      return false;
+    }
+    const probe = document.createRange();
+    probe.selectNodeContents(text);
+    probe.collapse(true);
+    return range.compareBoundaryPoints(Range.START_TO_START, probe) === 0;
   }
-  placeCaretInBlock(block);
-  cleanupEditorStructure(editor);
+
+  const probe = document.createRange();
+  probe.selectNodeContents(li);
+  probe.collapse(true);
+  try {
+    return range.compareBoundaryPoints(Range.START_TO_START, probe) === 0;
+  } catch {
+    return false;
+  }
 }
 
-export function handleTodoKeydown(
+/**
+ * Turn the current list item into a normal paragraph in-place.
+ * Keeps the caret at the start of that line (does NOT jump to previous item).
+ */
+function liftListItemToParagraph(li: HTMLLIElement, list: HTMLElement) {
+  if (list.classList.contains("todo-list")) {
+    stripTodoChrome(li);
+  }
+
+  const block = document.createElement("div");
+  while (li.firstChild) block.append(li.firstChild);
+  if (!block.childNodes.length || isBlankBlock(block)) {
+    block.replaceChildren(document.createElement("br"));
+  }
+
+  const prev = li.previousElementSibling;
+  const next = li.nextElementSibling;
+
+  if (!prev && !next) {
+    list.replaceWith(block);
+  } else if (!prev) {
+    list.before(block);
+    li.remove();
+  } else if (!next) {
+    list.after(block);
+    li.remove();
+  } else {
+    const afterList = document.createElement(list.tagName.toLowerCase());
+    if (list.classList.contains("todo-list")) {
+      afterList.classList.add("todo-list");
+    }
+    while (li.nextSibling) afterList.append(li.nextSibling);
+    li.remove();
+    list.after(block, afterList);
+    if (!list.children.length) list.remove();
+  }
+
+  placeCaretInBlock(block);
+}
+
+export function handleListKeydown(
   editor: HTMLElement,
   event: KeyboardEvent,
 ): boolean {
@@ -1082,14 +1141,16 @@ export function handleTodoKeydown(
   if (!marker) return false;
   const li = closestListItem(marker.range.startContainer, editor);
   const list = li ? closestList(li, editor) : null;
-  if (!li || !list?.classList.contains("todo-list")) return false;
+  if (!li || !list) return false;
 
+  const isTodo = list.classList.contains("todo-list");
   const text = li.querySelector(".todo-text") as HTMLElement | null;
 
-  if (event.key === "Enter" && !event.shiftKey) {
+  if (event.key === "Enter" && !event.shiftKey && isTodo) {
     if (isTodoTextEmpty(text)) {
       event.preventDefault();
-      exitTodoItem(li, list, editor);
+      // Empty todo Enter exits the list onto a plain line after it.
+      liftListItemToParagraph(li, list);
       return true;
     }
 
@@ -1102,52 +1163,22 @@ export function handleTodoKeydown(
   }
 
   if (event.key === "Backspace" && marker.range.collapsed) {
-    const atStartOfText =
-      Boolean(text) &&
-      (marker.range.startContainer === text ||
-        text!.contains(marker.range.startContainer)) &&
-      (() => {
-        const probe = document.createRange();
-        probe.selectNodeContents(text!);
-        probe.collapse(true);
-        return (
-          marker.range.compareBoundaryPoints(Range.START_TO_START, probe) === 0
-        );
-      })();
-
-    if (!atStartOfText) return false;
-
+    if (!isCaretAtListItemStart(li, marker.range, isTodo)) return false;
     event.preventDefault();
-    if (isTodoTextEmpty(text)) {
-      const prev = li.previousElementSibling;
-      if (prev instanceof HTMLLIElement) {
-        li.remove();
-        ensureTodoItem(prev);
-        focusTodoText(prev, true);
-      } else {
-        exitTodoItem(li, list, editor);
-      }
-      cleanupEditorStructure(editor);
-      return true;
-    }
-
-    // Non-empty item: Backspace at start removes this item from the todo list
-    // and keeps the text as a normal paragraph (check marker goes away).
-    stripTodoChrome(li);
-    const block = document.createElement("div");
-    while (li.firstChild) block.append(li.firstChild);
-    if (!block.childNodes.length) block.append(document.createElement("br"));
-    const prev = li.previousElementSibling;
-    if (prev) prev.after(block);
-    else list.before(block);
-    li.remove();
-    if (!list.children.length) list.remove();
-    placeCaretInBlock(block);
-    cleanupEditorStructure(editor);
+    // Clear the list marker on this line; keep caret at the line start.
+    liftListItemToParagraph(li, list);
     return true;
   }
 
   return false;
+}
+
+/** @deprecated use handleListKeydown */
+export function handleTodoKeydown(
+  editor: HTMLElement,
+  event: KeyboardEvent,
+): boolean {
+  return handleListKeydown(editor, event);
 }
 
 export function readFormatState(editor: HTMLElement): FormatState {
