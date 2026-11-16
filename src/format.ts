@@ -165,8 +165,16 @@ function placeCaretInBlock(block: HTMLElement, atEnd = false) {
   selection.addRange(range);
 }
 
-/** Collapse leftover empty divs so placeholder/caret don't sit on different lines. */
+/** Collapse leftover empty divs after list/todo changes. */
 export function cleanupEditorStructure(editor: HTMLElement) {
+  // Remove blank blocks adjacent to lists first.
+  for (const list of Array.from(editor.querySelectorAll("ul, ol"))) {
+    const prev = list.previousSibling;
+    const next = list.nextSibling;
+    if (prev && isBlankBlock(prev)) prev.parentNode?.removeChild(prev);
+    if (next && isBlankBlock(next)) next.parentNode?.removeChild(next);
+  }
+
   // Drop empty siblings left behind by list insert/unwrap.
   for (const child of Array.from(editor.childNodes)) {
     if (!isBlankBlock(child)) continue;
@@ -175,19 +183,33 @@ export function cleanupEditorStructure(editor: HTMLElement) {
   }
 
   if (isEditorEmpty(editor)) {
-    editor.innerHTML = "<div><br></div>";
-    const block = editor.firstElementChild;
-    if (block instanceof HTMLElement) placeCaretInBlock(block);
-    return;
+    resetEmptyEditor(editor);
   }
+}
 
-  // Remove blank blocks adjacent to lists.
-  for (const list of Array.from(editor.querySelectorAll("ul, ol"))) {
-    const prev = list.previousSibling;
-    const next = list.nextSibling;
-    if (prev && isBlankBlock(prev)) prev.parentNode?.removeChild(prev);
-    if (next && isBlankBlock(next)) next.parentNode?.removeChild(next);
+/** Force a single empty block and put the caret inside it. */
+export function resetEmptyEditor(editor: HTMLElement) {
+  editor.innerHTML = "<div><br></div>";
+  const block = editor.firstElementChild;
+  if (block instanceof HTMLElement) {
+    focusEditor(editor);
+    placeCaretInBlock(block);
   }
+}
+
+/**
+ * Enter in an already-blank note should not keep stacking empty blocks.
+ * Returns true when the event was handled.
+ */
+export function handleEmptyEditorEnter(
+  editor: HTMLElement,
+  event: KeyboardEvent,
+): boolean {
+  if (event.key !== "Enter" || event.shiftKey || event.isComposing) return false;
+  if (!isEditorEmpty(editor)) return false;
+  event.preventDefault();
+  resetEmptyEditor(editor);
+  return true;
 }
 
 function selectionInEditor(editor: HTMLElement) {

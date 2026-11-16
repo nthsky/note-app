@@ -3,13 +3,16 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   applyFontSize,
   applyForeColor,
+  cleanupEditorStructure,
   contentToHtml,
+  handleEmptyEditorEnter,
   handleTodoKeydown,
   isEditorEmpty,
   normalizeFontSizeTree,
   normalizeTodoLists,
   readFormatState,
   repairTodoCaret,
+  resetEmptyEditor,
   saveEditorRange,
   sanitizeHtml,
   toggleBulletList,
@@ -383,6 +386,9 @@ async function main() {
   const btnEditTitle =
     document.querySelector<HTMLButtonElement>("#btn-edit-title");
   const formatToolbar = document.querySelector<HTMLElement>("#format-toolbar");
+  const editorShell = document.querySelector<HTMLElement>(".editor-shell");
+  const editorPlaceholder =
+    document.querySelector<HTMLElement>("#editor-placeholder");
   const editor = document.querySelector<HTMLElement>("#editor");
   const fmtSize = document.querySelector<HTMLSelectElement>("#fmt-size");
   const fmtColor = document.querySelector<HTMLInputElement>("#fmt-color");
@@ -418,6 +424,8 @@ async function main() {
     !emojiPicker ||
     !btnEditTitle ||
     !formatToolbar ||
+    !editorShell ||
+    !editorPlaceholder ||
     !editor ||
     !fmtSize ||
     !fmtColor ||
@@ -578,7 +586,8 @@ async function main() {
   editor.innerHTML = contentToHtml(state.content);
   normalizeFontSizeTree(editor);
   normalizeTodoLists(editor);
-  editor.classList.toggle("is-empty", isEditorEmpty(editor));
+  if (isEditorEmpty(editor)) resetEmptyEditor(editor);
+  else cleanupEditorStructure(editor);
   opacityInput.value = String(state.opacity);
   opacityValue.value = `${state.opacity}%`;
   bgColorInput.value = state.bgColor;
@@ -671,7 +680,9 @@ async function main() {
   });
 
   const syncEmptyState = () => {
-    editor.classList.toggle("is-empty", isEditorEmpty(editor));
+    const empty = isEditorEmpty(editor);
+    editor.classList.toggle("is-empty", empty);
+    editorPlaceholder.hidden = !empty;
   };
 
   const persistEditor = () => {
@@ -680,6 +691,8 @@ async function main() {
     window.clearTimeout(saveTimer);
     saveTimer = window.setTimeout(persist, 200);
   };
+
+  syncEmptyState();
 
   const syncFormatToolbar = () => {
     if (app.classList.contains("settings-open")) return;
@@ -786,11 +799,18 @@ async function main() {
 
   editor.addEventListener("input", () => {
     if (editor.querySelector("ul.todo-list")) normalizeTodoLists(editor);
+    if (isEditorEmpty(editor)) cleanupEditorStructure(editor);
     persistEditor();
   });
   editor.addEventListener("keydown", (event) => {
+    if (handleEmptyEditorEnter(editor, event)) {
+      persistEditor();
+      syncFormatToolbar();
+      return;
+    }
     if (handleTodoKeydown(editor, event)) {
       normalizeTodoLists(editor);
+      cleanupEditorStructure(editor);
       persistEditor();
       syncFormatToolbar();
     }
@@ -877,12 +897,12 @@ async function main() {
     const open = settings.hasAttribute("hidden");
     if (open) {
       settings.removeAttribute("hidden");
-      editor.setAttribute("hidden", "");
+      editorShell.setAttribute("hidden", "");
       formatToolbar.setAttribute("hidden", "");
       app.classList.add("settings-open");
     } else {
       settings.setAttribute("hidden", "");
-      editor.removeAttribute("hidden");
+      editorShell.removeAttribute("hidden");
       formatToolbar.removeAttribute("hidden");
       app.classList.remove("settings-open");
     }

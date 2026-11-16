@@ -322,16 +322,24 @@
         </button>
       </div>
 
-      <div
-        id="editor"
-        class="editor is-empty"
-        contenteditable="true"
-        role="textbox"
-        aria-multiline="true"
-        spellcheck="true"
-        data-placeholder="写点什么…"
-        aria-label="便签内容"
-      ></div>
+      <div class="editor-shell">
+        <div
+          id="editor-placeholder"
+          class="editor-placeholder"
+          aria-hidden="true"
+        >
+          写点什么…
+        </div>
+        <div
+          id="editor"
+          class="editor is-empty"
+          contenteditable="true"
+          role="textbox"
+          aria-multiline="true"
+          spellcheck="true"
+          aria-label="便签内容"
+        ></div>
+      </div>
 
       <div class="resize-hint" aria-hidden="true"></div>
     </div>
