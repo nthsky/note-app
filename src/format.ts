@@ -137,7 +137,11 @@ export function contentToHtml(content: string) {
 
 export function isEditorEmpty(editor: HTMLElement) {
   const text = (editor.textContent ?? "").replace(/\u200B/g, "").trim();
-  return text.length === 0;
+  if (text.length > 0) return false;
+  // Lists/todos count as content even before any text is typed,
+  // otherwise the placeholder overlays the checklist UI.
+  if (editor.querySelector("ul, ol")) return false;
+  return true;
 }
 
 function selectionInEditor(editor: HTMLElement) {
