@@ -135,6 +135,17 @@ export function contentToHtml(content: string) {
     .join("");
 }
 
+function isBlankBlock(node: Node) {
+  if (!(node instanceof HTMLElement)) {
+    return (node.textContent ?? "").replace(/\u200B/g, "").trim() === "";
+  }
+  if (node.matches("ul, ol")) return false;
+  const text = (node.textContent ?? "").replace(/\u200B/g, "").trim();
+  if (text.length > 0) return false;
+  if (node.querySelector("img, ul, ol, input, .todo-check")) return false;
+  return true;
+}
+
 export function isEditorEmpty(editor: HTMLElement) {
   const text = (editor.textContent ?? "").replace(/\u200B/g, "").trim();
   if (text.length > 0) return false;
@@ -142,6 +153,41 @@ export function isEditorEmpty(editor: HTMLElement) {
   // otherwise the placeholder overlays the checklist UI.
   if (editor.querySelector("ul, ol")) return false;
   return true;
+}
+
+function placeCaretInBlock(block: HTMLElement, atEnd = false) {
+  const selection = window.getSelection();
+  if (!selection) return;
+  const range = document.createRange();
+  range.selectNodeContents(block);
+  range.collapse(!atEnd);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+/** Collapse leftover empty divs so placeholder/caret don't sit on different lines. */
+export function cleanupEditorStructure(editor: HTMLElement) {
+  // Drop empty siblings left behind by list insert/unwrap.
+  for (const child of Array.from(editor.childNodes)) {
+    if (!isBlankBlock(child)) continue;
+    if (editor.childNodes.length <= 1) continue;
+    child.parentNode?.removeChild(child);
+  }
+
+  if (isEditorEmpty(editor)) {
+    editor.innerHTML = "<div><br></div>";
+    const block = editor.firstElementChild;
+    if (block instanceof HTMLElement) placeCaretInBlock(block);
+    return;
+  }
+
+  // Remove blank blocks adjacent to lists.
+  for (const list of Array.from(editor.querySelectorAll("ul, ol"))) {
+    const prev = list.previousSibling;
+    const next = list.nextSibling;
+    if (prev && isBlankBlock(prev)) prev.parentNode?.removeChild(prev);
+    if (next && isBlankBlock(next)) next.parentNode?.removeChild(next);
+  }
 }
 
 function selectionInEditor(editor: HTMLElement) {
@@ -742,6 +788,7 @@ export function toggleBulletList(editor: HTMLElement) {
 
   if (list?.classList.contains("todo-list")) {
     convertTodoToList(list as HTMLUListElement, "ul");
+    cleanupEditorStructure(editor);
     return;
   }
 
@@ -756,6 +803,7 @@ export function toggleBulletList(editor: HTMLElement) {
       stripTodoChrome(li as HTMLLIElement);
     }
   }
+  cleanupEditorStructure(editor);
 }
 
 export function toggleOrderedList(editor: HTMLElement) {
@@ -765,6 +813,7 @@ export function toggleOrderedList(editor: HTMLElement) {
 
   if (list?.classList.contains("todo-list")) {
     convertTodoToList(list as HTMLUListElement, "ol");
+    cleanupEditorStructure(editor);
     return;
   }
 
@@ -776,6 +825,36 @@ export function toggleOrderedList(editor: HTMLElement) {
   if (next?.classList.contains("todo-list")) {
     convertTodoToList(next as HTMLUListElement, "ol");
   }
+  cleanupEditorStructure(editor);
+}
+
+function unwrapTodoListToBlocks(list: HTMLUListElement) {
+  const blocks: HTMLDivElement[] = [];
+  for (const child of Array.from(list.children)) {
+    if (!(child instanceof HTMLLIElement)) continue;
+    stripTodoChrome(child);
+    const block = document.createElement("div");
+    while (child.firstChild) block.append(child.firstChild);
+    if (isBlankBlock(block)) {
+      block.replaceChildren(document.createElement("br"));
+    }
+    blocks.push(block);
+  }
+
+  if (blocks.length === 0 || blocks.every(isBlankBlock)) {
+    const empty = document.createElement("div");
+    empty.append(document.createElement("br"));
+    list.replaceWith(empty);
+    placeCaretInBlock(empty);
+    return empty;
+  }
+
+  const frag = document.createDocumentFragment();
+  for (const block of blocks) frag.append(block);
+  const first = blocks[0];
+  list.replaceWith(frag);
+  placeCaretInBlock(first);
+  return first;
 }
 
 export function toggleTodoList(editor: HTMLElement) {
@@ -784,15 +863,21 @@ export function toggleTodoList(editor: HTMLElement) {
   const list = closestList(marker?.range.startContainer ?? null, editor);
 
   if (list?.classList.contains("todo-list")) {
-    // Turn off: unwrap to plain blocks via native toggle after stripping.
-    convertTodoToList(list as HTMLUListElement, "ul");
-    document.execCommand("insertUnorderedList", false);
+    unwrapTodoListToBlocks(list as HTMLUListElement);
+    cleanupEditorStructure(editor);
     return;
   }
 
   if (list) {
     convertListToTodo(list);
+    cleanupEditorStructure(editor);
     return;
+  }
+
+  // Starting a todo in an empty note: clear blank placeholder blocks first
+  // so insertUnorderedList doesn't leave an empty first line behind.
+  if (isEditorEmpty(editor)) {
+    editor.innerHTML = "";
   }
 
   document.execCommand("insertUnorderedList", false);
@@ -801,9 +886,10 @@ export function toggleTodoList(editor: HTMLElement) {
     editor,
   );
   if (created) convertListToTodo(created);
+  cleanupEditorStructure(editor);
 }
 
-function exitTodoItem(li: HTMLLIElement, list: HTMLElement) {
+function exitTodoItem(li: HTMLLIElement, list: HTMLElement, editor: HTMLElement) {
   const block = document.createElement("div");
   block.append(document.createElement("br"));
   if (list.children.length === 1) {
@@ -812,12 +898,8 @@ function exitTodoItem(li: HTMLLIElement, list: HTMLElement) {
     li.remove();
     list.after(block);
   }
-  const selection = window.getSelection();
-  const range = document.createRange();
-  range.setStart(block, 0);
-  range.collapse(true);
-  selection?.removeAllRanges();
-  selection?.addRange(range);
+  placeCaretInBlock(block);
+  cleanupEditorStructure(editor);
 }
 
 export function handleTodoKeydown(
@@ -836,7 +918,7 @@ export function handleTodoKeydown(
   if (event.key === "Enter" && !event.shiftKey) {
     if (isTodoTextEmpty(text)) {
       event.preventDefault();
-      exitTodoItem(li, list);
+      exitTodoItem(li, list, editor);
       return true;
     }
 
@@ -872,8 +954,9 @@ export function handleTodoKeydown(
         ensureTodoItem(prev);
         focusTodoText(prev, true);
       } else {
-        exitTodoItem(li, list);
+        exitTodoItem(li, list, editor);
       }
+      cleanupEditorStructure(editor);
       return true;
     }
 
@@ -888,12 +971,8 @@ export function handleTodoKeydown(
     else list.before(block);
     li.remove();
     if (!list.children.length) list.remove();
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.setStart(block, 0);
-    range.collapse(true);
-    selection?.removeAllRanges();
-    selection?.addRange(range);
+    placeCaretInBlock(block);
+    cleanupEditorStructure(editor);
     return true;
   }
 
