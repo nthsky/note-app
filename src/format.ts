@@ -671,66 +671,28 @@ export function handleMarkdownListShortcut(
 
   // Keep any text that was typed after the markdown marker.
   const rest = (block.textContent ?? "").replace(/\u200B/g, "");
-  block.replaceChildren();
-  if (rest) block.append(document.createTextNode(rest));
-  else block.append(document.createElement("br"));
 
-  const selection = window.getSelection();
-  const caret = document.createRange();
-  if (rest && block.firstChild) {
-    caret.setStart(block.firstChild, 0);
-  } else {
-    caret.setStart(block, 0);
-  }
-  caret.collapse(true);
-  selection?.removeAllRanges();
-  selection?.addRange(caret);
+  // Build a brand-new list for THIS line only.
+  // Avoid execCommand(insert*List): browsers merge into the adjacent list above,
+  // so converting to todo would turn the whole previous list into checkboxes.
+  const list = document.createElement(kind === "ordered" ? "ol" : "ul");
+  const li = document.createElement("li");
+  if (rest) li.append(document.createTextNode(rest));
+  else li.append(document.createElement("br"));
+  list.append(li);
+  block.replaceWith(list);
 
-  if (kind === "ordered") {
-    document.execCommand("insertOrderedList", false);
-  } else {
-    document.execCommand("insertUnorderedList", false);
-  }
-
-  let list = closestList(window.getSelection()?.anchorNode ?? null, editor);
-  if (!list) {
-    // Fallback: newly created list is often the last list in the editor.
-    const lists = editor.querySelectorAll("ul, ol");
-    list = (lists[lists.length - 1] as HTMLUListElement | HTMLOListElement | undefined) ?? null;
-  }
-
-  let li: HTMLLIElement | null = null;
-  if (kind === "todo" && list) {
-    convertListToTodo(list);
-    li =
-      closestListItem(window.getSelection()?.anchorNode ?? null, editor) ??
-      (list.querySelector("li") as HTMLLIElement | null);
-    if (checked && li) {
+  if (kind === "todo") {
+    list.classList.add("todo-list");
+    ensureTodoItem(li);
+    if (checked) {
       const check = li.querySelector(".todo-check");
       check?.setAttribute("aria-checked", "true");
       li.classList.add("is-checked");
     }
-  } else if (list) {
-    list.classList.remove("todo-list");
-    for (const item of Array.from(list.querySelectorAll("li.todo-item"))) {
-      stripTodoChrome(item as HTMLLIElement);
-    }
-    li =
-      closestListItem(window.getSelection()?.anchorNode ?? null, editor) ??
-      (list.querySelector("li") as HTMLLIElement | null);
   }
 
-  // Only strip empty siblings around the new list — avoid resetEmptyEditor.
-  if (list) {
-    const prev = list.previousSibling;
-    const next = list.nextSibling;
-    if (prev && isBlankBlock(prev)) prev.parentNode?.removeChild(prev);
-    if (next && isBlankBlock(next)) next.parentNode?.removeChild(next);
-  }
-
-  if (li && editor.contains(li)) {
-    focusListItemContent(li);
-  }
+  focusListItemContent(li);
   return true;
 }
 
