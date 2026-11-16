@@ -798,7 +798,6 @@ async function main() {
 
   editor.addEventListener("input", () => {
     if (editor.querySelector("ul.todo-list")) normalizeTodoLists(editor);
-    if (isEditorEmpty(editor)) cleanupEditorStructure(editor);
     persistEditor();
   });
   editor.addEventListener("keydown", (event) => {

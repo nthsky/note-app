@@ -152,6 +152,12 @@ export function isEditorEmpty(editor: HTMLElement) {
   // Lists/todos count as content even before any text is typed,
   // otherwise the placeholder overlays the checklist UI.
   if (editor.querySelector("ul, ol")) return false;
+  // Multiple blank blocks mean the user pressed Enter — keep them and
+  // hide the placeholder instead of treating the note as empty.
+  const blocks = Array.from(editor.children).filter((el) =>
+    ["DIV", "P", "UL", "OL", "LI"].includes(el.tagName),
+  );
+  if (blocks.length > 1) return false;
   return true;
 }
 
